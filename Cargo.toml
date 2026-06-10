@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "crates/localpki-core",
+    "crates/messaging-crypto",
+    "crates/server",
+    "crates/demo-cli",
+]
+resolver = "2"
+
+# Dépendances partagées entre crates — une seule version à maintenir ici.
+# Chaque crate déclare ensuite `dep = { workspace = true }` sans répéter la version.
+[workspace.dependencies]
+ed25519-dalek  = { version = "2", features = ["pkcs8", "pem", "zeroize"] }
+x25519-dalek   = { version = "2", features = ["zeroize"] }
+serde          = { version = "1", features = ["derive"] }
+serde_json     = { version = "1" }
+sha2           = { version = "0.10" }
+hkdf           = { version = "0.12" }
+rand           = { version = "0.8" }
+zeroize        = { version = "1", features = ["derive"] }
+tokio          = { version = "1", features = ["full"] }
+uuid           = { version = "1", features = ["v4", "serde"] }
+thiserror      = { version = "1" }

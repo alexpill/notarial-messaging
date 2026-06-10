@@ -1,0 +1,24 @@
+[package]
+name = "demo-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "demo-cli"
+path = "src/main.rs"
+
+[dependencies]
+localpki-core    = { path = "../localpki-core" }
+messaging-crypto = { path = "../messaging-crypto" }
+tokio            = { workspace = true }
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+# Parser d'arguments CLI avec derive
+clap             = { version = "4", features = ["derive"] }
+# Client HTTP pour appeler le serveur
+reqwest          = { version = "0.11", features = ["json"] }
+# Couleurs dans le terminal pour la démo
+colored          = "2"
+# Barres de progression pour le scénario automatique
+indicatif        = "0.17"
+anyhow           = "1"

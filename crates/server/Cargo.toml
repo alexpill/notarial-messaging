@@ -1,0 +1,38 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+localpki-core    = { path = "../localpki-core" }
+messaging-crypto = { path = "../messaging-crypto" }
+# Framework HTTP async — feature "ws" pour WebSocket, "macros" pour les extracteurs
+axum             = { version = "0.7", features = ["ws", "macros"] }
+tokio            = { workspace = true }
+# Diesel ORM — sqlite feature + r2d2 pour le pool de connexions synchrone
+# On utilise spawn_blocking pour appeler Diesel depuis les handlers async Axum.
+# "returning_clauses_for_sqlite_3_35" : active INSERT ... RETURNING (SQLite ≥ 3.35)
+diesel           = { version = "2", features = ["sqlite", "r2d2", "returning_clauses_for_sqlite_3_35"] }
+# Macro embed_migrations! — intègre les migrations dans le binaire à la compilation
+diesel_migrations = "2"
+serde            = { workspace = true }
+serde_json       = { workspace = true }
+uuid             = { workspace = true }
+# Middleware CORS et tracing pour Axum
+tower-http       = { version = "0.5", features = ["cors", "trace"] }
+tracing          = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Chargement du fichier .env
+dotenvy          = "0.15"
+thiserror        = { workspace = true }
+zeroize          = { workspace = true, features = ["derive"] }
+ed25519-dalek    = { workspace = true }
+x25519-dalek     = { workspace = true }
+# Décoder HSM_MASTER_KEY_HEX et EN_SIGNING_KEY_HEX depuis l'env
+hex              = "0.4"
+# Gestion d'erreurs avec context dans main
+anyhow           = "1"

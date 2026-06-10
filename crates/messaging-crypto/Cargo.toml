@@ -1,0 +1,19 @@
+[package]
+name = "messaging-crypto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+localpki-core = { path = "../localpki-core" }
+# AES-256-GCM : chiffrement AEAD symétrique des messages
+aes-gcm       = "0.10"
+# Dérivation de clés HKDF-SHA256
+hkdf          = { workspace = true }
+sha2          = { workspace = true }
+rand          = { workspace = true }
+serde         = { workspace = true }
+zeroize       = { workspace = true, features = ["derive"] }
+uuid          = { workspace = true }
+thiserror     = { workspace = true }
+ed25519-dalek = { workspace = true }
+x25519-dalek  = { workspace = true, features = ["zeroize"] }

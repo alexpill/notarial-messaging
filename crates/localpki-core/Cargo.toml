@@ -1,0 +1,16 @@
+[package]
+name = "localpki-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ed25519-dalek = { workspace = true, features = ["pkcs8", "pem", "zeroize"] }
+x25519-dalek  = { workspace = true, features = ["zeroize"] }
+sha2          = { workspace = true }
+rand          = { workspace = true }
+serde         = { workspace = true }
+zeroize       = { workspace = true, features = ["derive"] }
+thiserror     = { workspace = true }
+# Génération et parsing de certificats X.509v3 auto-signés (format LocalPKI)
+rcgen         = "0.13"
+x509-cert     = "0.2"
