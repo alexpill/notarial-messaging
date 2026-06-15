@@ -87,6 +87,7 @@ pub fn verify_signature_id(cert: &LocalPKICert) -> Result<(), LocalPkiError> {
 }
 
 /// Step 9 — LRA side. Encrypts (SN, SI, pk) for the EN and signs the plaintext hash.
+/// See: https://cryptobook.nakov.com/asymmetric-key-ciphers/ecies-public-key-encryption
 pub fn prepare_lra_to_en_message(
     cert: &LocalPKICert,
     en_verifying_key: &ed25519_dalek::VerifyingKey,
