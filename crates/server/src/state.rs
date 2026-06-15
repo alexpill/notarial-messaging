@@ -1,4 +1,5 @@
 use crate::{config::AppConfig, db::DbPool, error::AppError, hsm::HsmSimulator};
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 pub struct AppState {
@@ -10,6 +11,8 @@ pub struct AppState {
     pub en_verifying_key: ed25519_dalek::VerifyingKey,
     /// Signs AuthResponse and Merkle roots; Mutex for thread-safe Send.
     pub en_signing_key: Mutex<ed25519_dalek::SigningKey>,
+    /// Per-acte broadcast channels — send_message notifies, ws_handler subscribes.
+    pub ws_channels: Mutex<HashMap<String, tokio::sync::broadcast::Sender<String>>>,
 }
 
 impl AppState {
@@ -21,6 +24,7 @@ impl AppState {
             config,
             en_verifying_key: verifying_key,
             en_signing_key: Mutex::new(signing_key),
+            ws_channels: Mutex::new(HashMap::new()),
         })
     }
 }

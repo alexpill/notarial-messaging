@@ -1,4 +1,4 @@
-use super::schema::{acte_participants, actes, identities, merkle_log, messages};
+use super::schema::{acte_participants, actes, identities, merkle_log, messages, sessions};
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -106,6 +106,27 @@ pub struct NewMessage<'a> {
     pub signature: &'a str,
     pub seq: i64,
     pub sent_at: i64,
+}
+
+// ─── sessions ─────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Queryable, Selectable, Serialize)]
+#[diesel(table_name = sessions)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct Session {
+    pub token: String,
+    pub sn: String,
+    pub created_at: i64,
+    pub expires_at: i64,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = sessions)]
+pub struct NewSession<'a> {
+    pub token: &'a str,
+    pub sn: &'a str,
+    pub created_at: i64,
+    pub expires_at: i64,
 }
 
 // ─── merkle_log ───────────────────────────────────────────────────────────────

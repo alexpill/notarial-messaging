@@ -59,6 +59,15 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    sessions (token) {
+        token -> Text,
+        sn -> Text,
+        created_at -> BigInt,
+        expires_at -> BigInt,
+    }
+}
+
 diesel::joinable!(acte_participants -> actes (acte_uuid));
 diesel::joinable!(acte_participants -> identities (participant_sn));
 diesel::joinable!(actes -> identities (notaire_sn));
@@ -66,6 +75,7 @@ diesel::joinable!(merkle_log -> actes (acte_uuid));
 diesel::joinable!(merkle_log -> messages (message_id));
 diesel::joinable!(messages -> actes (acte_uuid));
 diesel::joinable!(messages -> identities (sender_sn));
+diesel::joinable!(sessions -> identities (sn));
 
 diesel::allow_tables_to_appear_in_same_query!(
     acte_participants,
@@ -73,4 +83,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     identities,
     merkle_log,
     messages,
+    sessions,
 );
