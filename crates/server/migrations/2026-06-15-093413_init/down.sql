@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS merkle_log;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS acte_participants;
+DROP TABLE IF EXISTS actes;
+DROP TABLE IF EXISTS identities;

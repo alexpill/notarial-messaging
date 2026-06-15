@@ -1,0 +1,11 @@
+# Configuration Diesel CLI
+# Utilisé par `diesel migration run/revert/generate`
+# et par `diesel print-schema` pour générer src/db/schema.rs automatiquement.
+
+[print_schema]
+file = "src/db/schema.rs"
+# Avec SQLite on exclut la table interne de Diesel
+filter = { except_tables = ["__diesel_schema_migrations"] }
+
+[migrations_directory]
+dir = "migrations"
