@@ -15,5 +15,5 @@ serde         = { workspace = true }
 zeroize       = { workspace = true, features = ["derive"] }
 uuid          = { workspace = true }
 thiserror     = { workspace = true }
-ed25519-dalek = { workspace = true }
-x25519-dalek  = { workspace = true, features = ["zeroize"] }
+ed25519-dalek = { workspace = true, features = ["zeroize"] }
+x25519-dalek  = { workspace = true, features = ["zeroize", "static_secrets"] }

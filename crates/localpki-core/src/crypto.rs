@@ -37,3 +37,7 @@ impl KeyPair {
         StaticSecret::from(self.signing_key.to_scalar_bytes())
     }
 }
+
+pub fn verifying_key_to_x25519_public(verifying_key: &VerifyingKey) -> PublicKey {
+    PublicKey::from(verifying_key.to_montgomery().to_bytes())
+}
