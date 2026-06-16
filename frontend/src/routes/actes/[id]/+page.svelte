@@ -13,7 +13,8 @@
 		listMessages,
 		sendMessage,
 		getMerkleRoot,
-		addParticipant
+		addParticipant,
+		getWsTicket
 	} from '$lib/api/client';
 	import type { MessageResponse } from '$lib/api/client';
 	import { fromBase64url, toBase64url, edSkToX25519 } from '$lib/crypto/keys';
@@ -182,9 +183,26 @@
 		};
 	}
 
-	function connectWebSocket() {
+	async function connectWebSocket() {
 		if (wsDestroyed || !token) return;
-		const wsUrl = `ws://localhost:3000/ws/${acteId}?token=${encodeURIComponent(token)}`;
+		// Trade the session token for a short-lived single-use ticket. The ticket
+		// (not the session token) ends up in the WS URL, so browser/server logs
+		// only ever see a value that's worthless after the handshake.
+		let ticket: string;
+		try {
+			const resp = await getWsTicket(token);
+			ticket = resp.ticket;
+		} catch {
+			// Ticket fetch failed (network or expired session) — back off and retry.
+			if (wsDestroyed) return;
+			wsRetryTimer = setTimeout(() => {
+				wsRetryDelay = Math.min(wsRetryDelay * 2, 30_000);
+				connectWebSocket();
+			}, wsRetryDelay);
+			return;
+		}
+		if (wsDestroyed) return;
+		const wsUrl = `ws://localhost:3000/ws/${acteId}?ticket=${encodeURIComponent(ticket)}`;
 		ws = new WebSocket(wsUrl);
 
 		ws.onopen = () => {

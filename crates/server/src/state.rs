@@ -13,6 +13,19 @@ pub struct AppState {
     pub en_signing_key: Mutex<ed25519_dalek::SigningKey>,
     /// Per-acte broadcast channels — send_message notifies, ws_handler subscribes.
     pub ws_channels: Mutex<HashMap<String, tokio::sync::broadcast::Sender<String>>>,
+    /// Single-use short-lived tickets for WebSocket upgrades. Browsers can't set
+    /// custom headers on WS handshakes, so we used to accept the session token
+    /// as a query string — which leaks into access logs. The ticket flow has
+    /// the client trade its session token (via Bearer on POST /ws/ticket) for a
+    /// random 30-second single-use ticket; the ticket may safely appear in the
+    /// WS URL because it's worthless after the handshake.
+    pub ws_tickets: Mutex<HashMap<String, WsTicket>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WsTicket {
+    pub sn: String,
+    pub expires_at: i64,
 }
 
 impl AppState {
@@ -25,6 +38,7 @@ impl AppState {
             en_verifying_key: verifying_key,
             en_signing_key: Mutex::new(signing_key),
             ws_channels: Mutex::new(HashMap::new()),
+            ws_tickets: Mutex::new(HashMap::new()),
         })
     }
 
@@ -46,6 +60,7 @@ impl AppState {
             en_verifying_key: verifying_key,
             en_signing_key: Mutex::new(signing_key),
             ws_channels: Mutex::new(HashMap::new()),
+            ws_tickets: Mutex::new(HashMap::new()),
         }
     }
 }

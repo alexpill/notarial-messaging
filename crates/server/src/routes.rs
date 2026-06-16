@@ -37,6 +37,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         // Merkle log
         .route("/actes/:id/merkle", get(messages::get_merkle_root))
         // WebSocket
+        .route("/ws/ticket", post(ws::issue_ticket))
         .route("/ws/:acte_id", get(ws::ws_handler))
         .layer(cors)
         .with_state(state)

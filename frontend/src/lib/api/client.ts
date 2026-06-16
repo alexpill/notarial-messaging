@@ -180,6 +180,17 @@ export async function listMessages(
 
 // ─── Merkle ───────────────────────────────────────────────────────────────────
 
+// ─── WebSocket ticket ─────────────────────────────────────────────────────────
+
+/// Trade the session token for a single-use, 30-second WebSocket ticket. The
+/// ticket is safe to put in the WS URL because it is consumed on first use and
+/// expires quickly. Always call this immediately before opening a WebSocket.
+export async function getWsTicket(
+	token: string
+): Promise<{ ticket: string; expires_at: number }> {
+	return request('POST', '/ws/ticket', undefined, token);
+}
+
 export async function getMerkleRoot(
 	token: string,
 	acteId: string

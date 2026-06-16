@@ -1,6 +1,6 @@
-// Seed direct du Root LRA en base SQLite pour le scénario de démo.
-// Le serveur exige qu'un LRA soit déjà enregistré avant tout enrollment.
-// Seule cette fonction contourne l'API — tout le reste passe par le serveur.
+// Bootstrap Root LRA — seeded directly in SQLite because the server's POST
+// /enroll requires an existing LRA in the registry. Every other operation in
+// the demo goes through the HTTP API. This is the only out-of-band path.
 
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -10,14 +10,29 @@ use localpki_core::{
     enrollment::{EnrollmentChallenge, create_self_signed_cert},
 };
 
+use crate::identity::IdentityFile;
+
 pub struct RootLra {
     pub keypair: KeyPair,
     pub sn_hex: String,
 }
 
-/// Insère un Root LRA directement dans la DB SQLite et retourne ses clés.
-/// Utilise `INSERT OR IGNORE` pour être idempotent si appelé plusieurs fois.
+/// File next to the DB that persists the Root LRA's keypair across runs.
+/// Without this, every `demo-cli scenario` invocation would generate a fresh
+/// Root LRA and leave the previous ones as orphaned rows in `identities`.
+const ROOT_LRA_FILE: &str = "root_lra.json";
+
+/// Seeds a Root LRA into SQLite if none is recorded locally yet; otherwise
+/// reloads the existing keypair so the same identity is reused across runs.
+/// The file `root_lra.json` is the source of truth — if it disappears, a new
+/// Root LRA is generated and inserted (the old DB row, if any, becomes
+/// effectively orphaned — only the file-backed identity is reused).
 pub fn seed_root_lra(db_path: &str, en_url: &str) -> anyhow::Result<RootLra> {
+    if let Ok(existing) = IdentityFile::load(ROOT_LRA_FILE) {
+        let kp = existing.keypair()?;
+        return Ok(RootLra { keypair: kp, sn_hex: existing.sn_hex });
+    }
+
     let kp = KeyPair::generate().map_err(|e| anyhow::anyhow!("KeyPair::generate: {e:?}"))?;
     let sn_bytes: [u8; 16] = rand::random();
     let sn = SerialNumber(sn_bytes);
@@ -53,6 +68,11 @@ pub fn seed_root_lra(db_path: &str, en_url: &str) -> anyhow::Result<RootLra> {
         rusqlite::params![sn_hex, si_b64, pk_b64, tbs_der_b64, subject_id, sn_hex, now],
     )
     .context("INSERT root LRA into identities")?;
+
+    let identity = IdentityFile::from_keypair_and_cert("Root LRA", &kp, cert);
+    identity
+        .save(ROOT_LRA_FILE)
+        .with_context(|| format!("failed to persist {ROOT_LRA_FILE}"))?;
 
     Ok(RootLra { keypair: kp, sn_hex })
 }

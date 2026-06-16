@@ -91,18 +91,23 @@ pub async fn revoke_identity(
 
 // ─── sessions ────────────────────────────────────────────────────────────────
 
+/// Stores only the SHA-256 of `token_clear`, never the clear token. A DB leak
+/// then doesn't yield directly-usable session tokens — same idea as storing
+/// password hashes rather than passwords. The clear token is returned only
+/// once, by /auth/verify, to the client that just authenticated.
 pub async fn insert_session(
     pool: &DbPool,
-    token_val: String,
+    token_clear: String,
     sn_val: String,
     created: i64,
     expires: i64,
 ) -> Result<(), AppError> {
+    let token_hash = crate::utils::hash_session_token(&token_clear);
     run_db(pool, move |conn| {
         use crate::db::schema::sessions;
         diesel::insert_into(sessions::table)
             .values(crate::db::models::NewSession {
-                token: &token_val,
+                token: &token_hash,
                 sn: &sn_val,
                 created_at: created,
                 expires_at: expires,
@@ -113,14 +118,17 @@ pub async fn insert_session(
     .await
 }
 
+/// Accepts the clear token as presented by the caller, hashes it, and looks up
+/// the matching session row by hash. Symmetric with `insert_session`.
 pub async fn lookup_session(
     pool: &DbPool,
-    token_val: String,
+    token_clear: String,
 ) -> Result<Option<Session>, AppError> {
+    let token_hash = crate::utils::hash_session_token(&token_clear);
     run_db(pool, move |conn| {
         use crate::db::schema::sessions::dsl::*;
         sessions
-            .filter(token.eq(&token_val))
+            .filter(token.eq(&token_hash))
             .first::<Session>(conn)
             .optional()
     })
