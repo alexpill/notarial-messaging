@@ -1,17 +1,32 @@
-// Append-only Merkle transparency log.
-// Each message produces a leaf: SHA256(signature || acte_uuid || timestamp || seq).
-// The root can be signed by the EN to prove a message existed at a given time,
-// without revealing its content (which stays encrypted).
+// Append-only Merkle transparency log following RFC 6962 (Certificate Transparency).
+//
+// Hash construction:
+//   leaf_hash    = SHA256(0x00 || signature || acte_uuid || timestamp || seq)
+//   inner_hash   = SHA256(0x01 || left || right)
+//
+// The 0x00 / 0x01 domain separation prevents second-preimage attacks where a
+// leaf hash could be re-interpreted as an internal node (or vice versa),
+// allowing two distinct trees to share the same root.
+//
+// Odd subtrees are handled by RFC 6962 §2.1 splitting: at each recursion step,
+// the largest power-of-two `k < n` separates left and right subtrees. Orphan
+// nodes are promoted as-is rather than duplicated (the latter is the "Bitcoin"
+// style which has known ambiguities — see CVE-2012-2459).
 
 use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 
-/// Inclusion proof for a single leaf.
-/// Contains the sibling hashes needed to recompute the root.
+const LEAF_PREFIX: u8 = 0x00;
+const INNER_PREFIX: u8 = 0x01;
+
+/// Inclusion proof for a single leaf, following RFC 6962 audit path semantics.
+/// `siblings` lists the audit path hashes from leaf level up to the root;
+/// `leaf_index` and `tree_size` are required for the verifier to know on which
+/// side each sibling sits at each recursion step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MerkleProof {
     pub leaf_index: usize,
-    /// Sibling hashes from leaf level up to root.
+    pub tree_size: usize,
     pub siblings: Vec<[u8; 32]>,
 }
 
@@ -44,62 +59,49 @@ impl MerkleLog {
         leaf
     }
 
-    /// Compute the current Merkle root. Returns None if the log is empty.
+    /// Compute the current Merkle root (RFC 6962 MTH). Returns None if empty.
     pub fn root(&self) -> Option<[u8; 32]> {
         if self.leaves.is_empty() {
             return None;
         }
-        Some(compute_root(&self.leaves))
+        Some(mth(&self.leaves))
     }
 
-    /// Generate an inclusion proof for the leaf at `leaf_index`.
+    /// Generate a RFC 6962 audit path (PATH) for the leaf at `leaf_index`.
     pub fn proof(&self, leaf_index: usize) -> Option<MerkleProof> {
         if leaf_index >= self.leaves.len() {
             return None;
         }
         let mut siblings = Vec::new();
-        let mut nodes = self.leaves.clone();
-        let mut index = leaf_index;
-
-        while nodes.len() > 1 {
-            let sibling_index = if index % 2 == 0 { index + 1 } else { index - 1 };
-            // Odd tree: duplicate the last node rather than leaving a gap.
-            let sibling = if sibling_index < nodes.len() {
-                nodes[sibling_index]
-            } else {
-                nodes[index]
-            };
-            siblings.push(sibling);
-
-            nodes = nodes
-                .chunks(2)
-                .map(|pair| hash_pair(&pair[0], pair.get(1).unwrap_or(&pair[0])))
-                .collect();
-            index /= 2;
-        }
-
-        Some(MerkleProof { leaf_index, siblings })
+        audit_path(leaf_index, &self.leaves, &mut siblings);
+        Some(MerkleProof {
+            leaf_index,
+            tree_size: self.leaves.len(),
+            siblings,
+        })
     }
 
-    /// Verify that `leaf` is included in a tree with the given `root`.
+    /// Verify that `leaf` is included in a tree with the given `root` using
+    /// the RFC 6962 audit path verification (§2.1.1).
     pub fn verify_proof(root: &[u8; 32], leaf: &[u8; 32], proof: &MerkleProof) -> bool {
-        let mut current = *leaf;
-        let mut index = proof.leaf_index;
-
-        for sibling in &proof.siblings {
-            current = if index % 2 == 0 {
-                hash_pair(&current, sibling)
-            } else {
-                hash_pair(sibling, &current)
-            };
-            index /= 2;
+        if proof.leaf_index >= proof.tree_size {
+            return false;
         }
-
-        &current == root
+        let computed = match recompute_root(
+            *leaf,
+            proof.leaf_index,
+            proof.tree_size,
+            &proof.siblings,
+        ) {
+            Some(h) => h,
+            None => return false,
+        };
+        &computed == root
     }
 }
 
 /// Compute the leaf hash for a single message without appending to any log.
+/// Includes the RFC 6962 leaf prefix (0x00) for domain separation.
 pub fn leaf_hash(
     signature: &ed25519_dalek::Signature,
     acte_uuid: &uuid::Uuid,
@@ -107,6 +109,7 @@ pub fn leaf_hash(
     seq: u64,
 ) -> [u8; 32] {
     let mut hasher = Sha256::new();
+    hasher.update([LEAF_PREFIX]);
     hasher.update(signature.to_bytes());
     hasher.update(acte_uuid.as_bytes());
     hasher.update(timestamp.to_le_bytes());
@@ -114,19 +117,75 @@ pub fn leaf_hash(
     hasher.finalize().into()
 }
 
-fn compute_root(nodes: &[[u8; 32]]) -> [u8; 32] {
-    if nodes.len() == 1 {
-        return nodes[0];
+// ─── RFC 6962 core ────────────────────────────────────────────────────────────
+
+/// MTH(D[n]) — Merkle Tree Hash, RFC 6962 §2.1.
+/// Caller guarantees `leaves` is non-empty.
+fn mth(leaves: &[[u8; 32]]) -> [u8; 32] {
+    if leaves.len() == 1 {
+        return leaves[0];
     }
-    let next: Vec<[u8; 32]> = nodes
-        .chunks(2)
-        .map(|pair| hash_pair(&pair[0], pair.get(1).unwrap_or(&pair[0])))
-        .collect();
-    compute_root(&next)
+    let k = largest_pow2_lt(leaves.len());
+    let left = mth(&leaves[..k]);
+    let right = mth(&leaves[k..]);
+    hash_inner(&left, &right)
 }
 
-fn hash_pair(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+/// PATH(m, D[n]) — RFC 6962 §2.1.1. Pushes the audit path into `out` so that
+/// `out[0]` is the sibling at the leaf level and the last element is at the
+/// root level. Recursion mirrors the verifier's `recompute_root`.
+fn audit_path(m: usize, leaves: &[[u8; 32]], out: &mut Vec<[u8; 32]>) {
+    let n = leaves.len();
+    if n == 1 {
+        return;
+    }
+    let k = largest_pow2_lt(n);
+    if m < k {
+        audit_path(m, &leaves[..k], out);
+        out.push(mth(&leaves[k..]));
+    } else {
+        audit_path(m - k, &leaves[k..], out);
+        out.push(mth(&leaves[..k]));
+    }
+}
+
+/// Inverse of `audit_path`: rebuild the root from leaf + audit path.
+/// Returns None if the proof has the wrong length or shape.
+fn recompute_root(
+    leaf: [u8; 32],
+    m: usize,
+    n: usize,
+    siblings: &[[u8; 32]],
+) -> Option<[u8; 32]> {
+    if n == 1 {
+        return if siblings.is_empty() { Some(leaf) } else { None };
+    }
+    if siblings.is_empty() {
+        return None;
+    }
+    let k = largest_pow2_lt(n);
+    let last = siblings.len() - 1;
+    let inner = &siblings[..last];
+    let top_sibling = siblings[last];
+    if m < k {
+        let sub = recompute_root(leaf, m, k, inner)?;
+        Some(hash_inner(&sub, &top_sibling))
+    } else {
+        let sub = recompute_root(leaf, m - k, n - k, inner)?;
+        Some(hash_inner(&top_sibling, &sub))
+    }
+}
+
+/// Largest power of two strictly less than `n`. Caller guarantees `n >= 2`.
+fn largest_pow2_lt(n: usize) -> usize {
+    debug_assert!(n >= 2);
+    let highest = usize::BITS - (n - 1).leading_zeros() - 1;
+    1usize << highest
+}
+
+fn hash_inner(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
     let mut hasher = Sha256::new();
+    hasher.update([INNER_PREFIX]);
     hasher.update(left);
     hasher.update(right);
     hasher.finalize().into()

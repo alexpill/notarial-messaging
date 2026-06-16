@@ -1,7 +1,4 @@
-use crate::{
-    db::models::NewIdentity, en::registry, error::AppError, middleware::AuthenticatedSn,
-    state::AppState,
-};
+use crate::{db::models::NewIdentity, en::registry, error::AppError, state::AppState};
 use axum::{
     Json,
     extract::{Path, State},
