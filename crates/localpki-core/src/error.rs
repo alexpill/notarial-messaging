@@ -6,6 +6,9 @@ pub enum LocalPkiError {
     #[error("certificate expired")]
     ExpiredCertificate,
 
+    #[error("certificate not yet valid")]
+    CertNotYetValid,
+
     #[error("unknown serial number")]
     UnknownSerialNumber,
 

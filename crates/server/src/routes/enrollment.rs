@@ -37,6 +37,13 @@ pub async fn enroll(
     verify_signature_id(&cert)
         .map_err(|_| AppError::BadRequest("invalid signature ID (SI)".into()))?;
 
+    // Reject certs whose validity window does not cover "now" — refuse to enroll
+    // an already-expired or not-yet-valid certificate. Matches paper §3.3.
+    cert.tbs
+        .validity
+        .check(crate::utils::unix_now()?)
+        .map_err(|e| AppError::BadRequest(format!("certificate validity: {e}")))?;
+
     // The LRA's trustworthiness is established by its own presence in the EN registry.
     // No hardcoded LRA key — any enrolled and non-revoked identity can act as LRA.
     let lra = registry::lookup_identity(&state.db, req.lra_sn.clone())

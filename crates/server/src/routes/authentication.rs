@@ -29,6 +29,14 @@ pub async fn verify(
     verify_signature_id(&cert)
         .map_err(|_| AppError::BadRequest("invalid signature ID (SI)".into()))?;
 
+    // Reject expired or not-yet-valid certs at auth time — matches LocalPKI
+    // Algorithm 2 (§3.3). The check is intentionally done before the EN
+    // round-trip so an expired cert never reaches the registry lookup.
+    cert.tbs
+        .validity
+        .check(crate::utils::unix_now()?)
+        .map_err(|e| AppError::BadRequest(format!("certificate validity: {e}")))?;
+
     let auth_request = build_auth_request(&cert);
 
     // Clone before the await to avoid holding the Mutex across an await point.

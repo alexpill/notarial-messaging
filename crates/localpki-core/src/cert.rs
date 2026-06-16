@@ -19,6 +19,20 @@ pub struct Validity {
     pub not_after: i64,  // Unix timestamp
 }
 
+impl Validity {
+    /// Returns Ok if `now` (Unix seconds) lies within [not_before, not_after].
+    /// localpki-core has no clock — the server passes its trusted current time.
+    pub fn check(&self, now: i64) -> Result<(), LocalPkiError> {
+        if now < self.not_before {
+            return Err(LocalPkiError::CertNotYetValid);
+        }
+        if now > self.not_after {
+            return Err(LocalPkiError::ExpiredCertificate);
+        }
+        Ok(())
+    }
+}
+
 /// Certificate body before self-signature. Maps to X.509v3 fields (see ARCHITECTURE.md §8.2).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TBSCert {
@@ -112,6 +126,31 @@ impl TBSCert {
 pub struct LocalPKICert {
     pub tbs: TBSCert,
     pub signature_id: SignatureId,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validity_accepts_inside_window() {
+        let v = Validity { not_before: 100, not_after: 200 };
+        assert!(v.check(100).is_ok());
+        assert!(v.check(150).is_ok());
+        assert!(v.check(200).is_ok());
+    }
+
+    #[test]
+    fn validity_rejects_before_not_before() {
+        let v = Validity { not_before: 100, not_after: 200 };
+        assert!(matches!(v.check(99), Err(LocalPkiError::CertNotYetValid)));
+    }
+
+    #[test]
+    fn validity_rejects_after_not_after() {
+        let v = Validity { not_before: 100, not_after: 200 };
+        assert!(matches!(v.check(201), Err(LocalPkiError::ExpiredCertificate)));
+    }
 }
 
 /// EN registry entry for a single LRA. The EN never stores the full TBSCert, only (SN, SI).
