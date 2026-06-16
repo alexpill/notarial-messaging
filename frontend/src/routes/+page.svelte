@@ -46,8 +46,11 @@
 						>Gérez vos dossiers, enrollez vos clients, suivez les actes.</Card.Description
 					>
 				</Card.Header>
-				<Card.Footer>
+				<Card.Footer class="flex flex-col gap-2">
 					<Button class="w-full" href="/notaire/actes">Accéder</Button>
+					<Button variant="outline" class="w-full" href="/notaire/enroller">
+						Enrôler un client
+					</Button>
 				</Card.Footer>
 			</Card.Root>
 
@@ -70,10 +73,11 @@
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-xl">
 			<Card.Root class="hover:shadow-md transition-shadow cursor-pointer">
 				<Card.Header>
-					<Card.Title>Espace notaire</Card.Title>
-					<Card.Description
-						>Gérez vos dossiers, enrollez vos clients, suivez les actes.</Card.Description
-					>
+					<Card.Title>Nouvelle identité</Card.Title>
+					<Card.Description>
+						Génère ta paire de clés et ton certificat. Un notaire devra ensuite valider
+						ton identité physiquement avant de t'enregistrer.
+					</Card.Description>
 				</Card.Header>
 				<Card.Footer>
 					<Button class="w-full" href="/enroll">S'enroller</Button>
@@ -82,11 +86,14 @@
 
 			<Card.Root class="hover:shadow-md transition-shadow cursor-pointer">
 				<Card.Header>
-					<Card.Title>Espace client</Card.Title>
-					<Card.Description>Consultez et signez vos documents de manière sécurisée.</Card.Description>
+					<Card.Title>Se connecter</Card.Title>
+					<Card.Description>
+						Déjà enrôlé ? Connecte-toi avec ton certificat local stocké en
+						sessionStorage.
+					</Card.Description>
 				</Card.Header>
 				<Card.Footer>
-					<Button variant="outline" class="w-full" href="/enroll">S'enroller</Button>
+					<Button variant="outline" class="w-full" href="/auth">Se connecter</Button>
 				</Card.Footer>
 			</Card.Root>
 		</div>

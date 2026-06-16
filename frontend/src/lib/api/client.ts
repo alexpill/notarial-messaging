@@ -57,11 +57,6 @@ export interface TbsJson {
 	en_url: string;
 }
 
-export interface LraSignResponse {
-	lra_signature: string; // base64url
-	lra_sn: string; // hex
-}
-
 export interface EnrollResponse {
 	serial_number: string; // hex
 	message: string;
@@ -74,10 +69,6 @@ export interface AuthVerifyResponse {
 
 export async function prepareTbs(req: PrepareTbsRequest): Promise<PrepareTbsResponse> {
 	return request('POST', '/enroll/prepare', req);
-}
-
-export async function lraSign(certJson: unknown): Promise<LraSignResponse> {
-	return request('POST', '/enroll/lra-sign', { cert: certJson });
 }
 
 export async function enroll(
@@ -192,7 +183,12 @@ export async function listMessages(
 export async function getMerkleRoot(
 	token: string,
 	acteId: string
-): Promise<{ root: string | null; leaves_count: number; en_signature: null }> {
+): Promise<{
+	root: string | null;
+	leaves_count: number;
+	en_signature: string | null;
+	signed_root: string | null;
+}> {
 	return request('GET', `/actes/${acteId}/merkle`, undefined, token);
 }
 
