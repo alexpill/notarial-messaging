@@ -112,6 +112,7 @@ pub async fn send_message(
         .clone();
 
     // Move request fields into the closure; keep clones for the response.
+    let client_timestamp = req.timestamp;
     let c_message = req.c_message;
     let nonce = req.nonce;
     let sig_b64 = req.signature;
@@ -175,6 +176,8 @@ pub async fn send_message(
             })?;
             let en_sig = en_sk.sign(&root);
 
+            // sent_at stores the client-supplied timestamp so decryption AAD is
+            // consistent. The Merkle leaf uses server `now` separately for ordering integrity.
             diesel::insert_into(messages::table)
                 .values(NewMessage {
                     id: &msg_id,
@@ -184,7 +187,7 @@ pub async fn send_message(
                     nonce: &nonce,
                     signature: &sig_b64,
                     seq: next_seq,
-                    sent_at: now,
+                    sent_at: client_timestamp,
                 })
                 .execute(conn)?;
 
@@ -227,7 +230,7 @@ pub async fn send_message(
         nonce: nonce_resp,
         signature: sig_resp,
         seq,
-        sent_at: now,
+        sent_at: client_timestamp,
     }))
 }
 

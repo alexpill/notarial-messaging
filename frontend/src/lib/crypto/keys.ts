@@ -82,6 +82,7 @@ export interface Identity {
 	name: string;
 	/** JSON-stringified LocalPKICert (tbs_json + signature_id as number[]) */
 	cert_json: string;
+	role: 'notaire' | 'client';
 }
 
 export function saveIdentity(identity: Identity): void {
