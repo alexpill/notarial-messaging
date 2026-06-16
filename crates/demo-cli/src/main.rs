@@ -41,6 +41,20 @@ enum Commands {
         output: String,
     },
 
+    /// Endosser un certificat client déjà existant (rôle LRA face-à-face).
+    /// Le client a généré son cert ailleurs (ex: frontend `/enroll`) et te l'a
+    /// transmis. Tu vérifies son identité physique, puis tu signes et envoies.
+    Enroller {
+        /// Fichier d'identité du notaire qui agit comme LRA (doit avoir une session valide)
+        #[arg(long)]
+        notaire: String,
+        /// Fichier JSON contenant le LocalPKICert du client (tbs + signature_id)
+        #[arg(long)]
+        cert: String,
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
+
     /// Commandes sur les actes
     Acte {
         #[command(subcommand)]
@@ -122,6 +136,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Enroll { name, server, lra, output } => {
             cmd_enroll(&name, &server, &lra, &output).await?;
         }
+        Commands::Enroller { notaire, cert, server } => {
+            cmd_enroller(&notaire, &cert, &server).await?;
+        }
         Commands::Acte { action: ActeCommands::Create { title, parties, notaire, server } } => {
             cmd_acte_create(&title, &parties, &notaire, &server).await?;
         }
@@ -170,6 +187,44 @@ async fn cmd_enroll(name: &str, server: &str, lra_path: &str, output: &str) -> a
 
     println!("{} {} enregistré — SN : {}", "✓".green().bold(), name, sn_hex.dimmed());
     println!("  Identité sauvegardée dans : {output}");
+    Ok(())
+}
+
+async fn cmd_enroller(notaire_path: &str, cert_path: &str, server: &str) -> anyhow::Result<()> {
+    let notaire = IdentityFile::load(notaire_path)?;
+    let notaire_kp = notaire.keypair()?;
+
+    let cert_json = std::fs::read_to_string(cert_path)
+        .with_context(|| format!("failed to read cert file: {cert_path}"))?;
+    let cert: localpki_core::cert::LocalPKICert = serde_json::from_str(&cert_json)
+        .with_context(|| format!("failed to parse cert as LocalPKICert: {cert_path}"))?;
+
+    // Sanity: verify the self-signature so we don't endorse junk.
+    localpki_core::enrollment::verify_signature_id(&cert)
+        .map_err(|e| anyhow::anyhow!("client cert has invalid SI (self-signature): {e:?}"))?;
+
+    let subject = cert.tbs.subject_id.clone();
+    let client_sn_hex = hex::encode(cert.tbs.serial_number.0);
+
+    let lra_sig_b64 = make_lra_signature(&notaire_kp.signing_key, &cert);
+    let client = ApiClient::new(server);
+    let returned_sn = client.enroll(&cert, &notaire.sn_hex, &lra_sig_b64).await?;
+
+    println!(
+        "{} {} enrôlé par {} — SN : {}",
+        "✓".green().bold(),
+        subject,
+        notaire.name,
+        returned_sn.dimmed()
+    );
+    if returned_sn != client_sn_hex {
+        println!(
+            "  {} SN serveur ({}) diffère du SN du cert ({}) — vérifier",
+            "⚠".yellow(),
+            returned_sn,
+            client_sn_hex,
+        );
+    }
     Ok(())
 }
 
