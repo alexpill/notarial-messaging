@@ -10,6 +10,9 @@ mod routes;
 mod state;
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
@@ -21,6 +24,12 @@ async fn main() -> anyhow::Result<()> {
     let config = config::AppConfig::from_env()?;
     let pool = db::init_pool(&config.database_url)?;
     let hsm = hsm::HsmSimulator::from_env()?;
+
+    // The server holds no Root LRA. Bootstrap is the operator's job: run
+    // `demo-cli scenario` (or a dedicated bootstrap command) which seeds a
+    // Root LRA directly in SQLite and enrolls the first notaire. The EN's
+    // job stops at storing `(SN, SI, pk, lra_id)` — no LRA key lives here.
+
     let state = Arc::new(state::AppState::new(pool, hsm, config.clone())?);
     let app = routes::build_router(state);
 

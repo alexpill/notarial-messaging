@@ -1,4 +1,7 @@
-use crate::{db::models::NewIdentity, en::registry, error::AppError, state::AppState};
+use crate::{
+    db::models::NewIdentity, en::registry, error::AppError, middleware::AuthenticatedSn,
+    state::AppState,
+};
 use axum::{
     Json,
     extract::{Path, State},
@@ -95,10 +98,17 @@ pub async fn get_identity(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("identity '{}' not found", sn)))?;
 
+    // Extract display_name from the tbs_cert JSON (subject_id field).
+    // tbs_cert is stored as serde_json::to_string(&TBSCert), so subject_id is always present.
+    let display_name: Option<String> = serde_json::from_str::<serde_json::Value>(&identity.tbs_cert)
+        .ok()
+        .and_then(|v| v["subject_id"].as_str().map(str::to_owned));
+
     Ok(Json(serde_json::json!({
         "sn": identity.sn,
         "pk": identity.pk,
         "tbs_cert": identity.tbs_cert,
+        "display_name": display_name,
         "registered_at": identity.registered_at,
     })))
 }
@@ -111,3 +121,66 @@ fn decode_b64<const N: usize>(s: &str, label: &str) -> Result<[u8; N], AppError>
         .try_into()
         .map_err(|_| AppError::BadRequest(format!("{label}: expected {N} bytes")))
 }
+
+// ─── Frontend-assisted enrollment endpoints ───────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct PrepareTbsRequest {
+    pub subject_id: String,
+    /// Ed25519 public key as array of 32 numbers (Rust serde format).
+    pub public_key: [u8; 32],
+}
+
+#[derive(Debug, Serialize)]
+pub struct PrepareTbsResponse {
+    /// Canonical source of truth for the SN. Use this — not tbs_json.serial_number —
+    /// to build sn_hex on the frontend. tbs_json.serial_number contains the same bytes
+    /// but its JSON representation depends on serde's serialization of [u8; 16].
+    pub sn_bytes: [u8; 16],
+    /// TBSCert as JSON — client reconstructs the LocalPKICert with this + SI.
+    pub tbs_json: serde_json::Value,
+    /// DER-encoded TBSCert bytes, base64url. Client signs these to produce SI.
+    pub tbs_der_b64url: String,
+}
+
+/// Generates a SN + TBSCert DER for the client to self-sign.
+/// The client signs the DER with its Ed25519 key to produce SI.
+pub async fn prepare_tbs(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<PrepareTbsRequest>,
+) -> Result<Json<PrepareTbsResponse>, AppError> {
+    let pk = ed25519_dalek::VerifyingKey::from_bytes(&req.public_key)
+        .map_err(|_| AppError::BadRequest("invalid Ed25519 public key".into()))?;
+
+    let sn_bytes: [u8; 16] = rand::random();
+    let sn = localpki_core::cert::SerialNumber(sn_bytes);
+
+    let now = crate::utils::unix_now()?;
+    let tbs = localpki_core::cert::TBSCert {
+        serial_number: sn,
+        subject_id: req.subject_id,
+        public_key: pk,
+        validity: localpki_core::cert::Validity {
+            not_before: now,
+            not_after: now + 365 * 24 * 3600,
+        },
+        en_url: format!("http://{}:{}", state.config.server_host, state.config.server_port),
+    };
+
+    let tbs_der = tbs.to_der().map_err(|_| AppError::Config("DER encoding failed".into()))?;
+    let tbs_json = serde_json::to_value(&tbs)
+        .map_err(|e| AppError::Database(format!("tbs json: {e}")))?;
+
+    Ok(Json(PrepareTbsResponse {
+        sn_bytes,
+        tbs_json,
+        tbs_der_b64url: URL_SAFE_NO_PAD.encode(&tbs_der),
+    }))
+}
+
+// `lra_sign` endpoint deliberately removed. Endorsements must be produced by an
+// authenticated LRA (notaire) signing the cert with their own private key on
+// the client side — see frontend `/notaire/enroller` and demo-cli `enroller`.
+// The EN now exposes only `POST /enroll`, which validates the LRA's Ed25519
+// signature against the pk recorded in the registry. This keeps the EN minimal
+// (it never holds an LRA key) and matches Dumas et al. §1.2, §2.1.

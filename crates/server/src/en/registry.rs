@@ -8,6 +8,7 @@ use crate::{
     },
     error::AppError,
 };
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use diesel::prelude::*;
 
 // ─── identities ──────────────────────────────────────────────────────────────
@@ -126,6 +127,23 @@ pub async fn lookup_session(
 
 // ─── actes ───────────────────────────────────────────────────────────────────
 
+/// Returns all actes where `sn_val` is listed as a participant.
+pub async fn list_actes_for_participant(
+    pool: &DbPool,
+    sn_val: String,
+) -> Result<Vec<Acte>, AppError> {
+    run_db(pool, move |conn| {
+        use crate::db::schema::{acte_participants, actes};
+        acte_participants::table
+            .filter(acte_participants::participant_sn.eq(&sn_val))
+            .inner_join(actes::table.on(actes::uuid.eq(acte_participants::acte_uuid)))
+            .select(actes::all_columns)
+            .order(actes::created_at.desc())
+            .load::<Acte>(conn)
+    })
+    .await
+}
+
 pub async fn get_acte(pool: &DbPool, uuid_val: String) -> Result<Option<Acte>, AppError> {
     run_db(pool, move |conn| {
         use crate::db::schema::actes::dsl::*;
@@ -166,4 +184,70 @@ pub async fn get_participant_key(
             .optional()
     })
     .await
+}
+
+pub async fn get_participant_entry(
+    pool: &DbPool,
+    acte_uuid_val: String,
+    sn_val: String,
+) -> Result<Option<crate::db::models::ActeParticipant>, AppError> {
+    run_db(pool, move |conn| {
+        use crate::db::schema::acte_participants::dsl::*;
+        acte_participants
+            .filter(acte_uuid.eq(&acte_uuid_val))
+            .filter(participant_sn.eq(&sn_val))
+            .first::<crate::db::models::ActeParticipant>(conn)
+            .optional()
+    })
+    .await
+}
+
+/// Seeds a Root LRA in the DB at startup. Returns the keypair and its SN hex.
+/// Each call inserts a fresh row with a new random SN — calling this multiple times
+/// (e.g. on each restart) accumulates harmless LRA rows in the identities table.
+/// The returned keypair is stored in AppState for the lifetime of the process.
+pub async fn seed_root_lra(
+    pool: &DbPool,
+    en_url: &str,
+) -> Result<(localpki_core::crypto::KeyPair, String), AppError> {
+    let kp = localpki_core::crypto::KeyPair::generate()
+        .map_err(|_| AppError::Config("root LRA key generation failed".into()))?;
+
+    let sn_bytes: [u8; 16] = rand::random();
+    let sn = localpki_core::cert::SerialNumber(sn_bytes);
+
+    let challenge = localpki_core::enrollment::EnrollmentChallenge {
+        serial_number: sn,
+        en_url: en_url.to_string(),
+        validity_days: 3650,
+    };
+    let cert = localpki_core::enrollment::create_self_signed_cert(&kp, "Root LRA", &challenge)
+        .map_err(|_| AppError::Config("root LRA cert creation failed".into()))?;
+
+    let sn_hex = hex::encode(sn.0);
+    let si_b64 = URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes());
+    let pk_b64 = URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes());
+    let tbs_json = serde_json::to_string(&cert.tbs)
+        .map_err(|e| AppError::Database(format!("tbs serialization: {e}")))?;
+    let now = crate::utils::unix_now()?;
+    let sn_hex_db = sn_hex.clone();
+
+    run_db(pool, move |conn| {
+        use crate::db::schema::identities;
+        diesel::insert_into(identities::table)
+            .values(NewIdentity {
+                sn: &sn_hex_db,
+                si: &si_b64,
+                pk: &pk_b64,
+                tbs_cert: &tbs_json,
+                lra_id: &sn_hex_db,
+                registered_at: now,
+                revoked_at: None,
+            })
+            .execute(conn)?;
+        Ok(())
+    })
+    .await?;
+
+    Ok((kp, sn_hex))
 }

@@ -21,3 +21,4 @@ zeroize        = { version = "1", features = ["derive"] }
 tokio          = { version = "1", features = ["full"] }
 uuid           = { version = "1", features = ["v4", "serde"] }
 thiserror      = { version = "1" }
+base64         = { version = "0.22" }

@@ -25,6 +25,12 @@ impl MerkleLog {
         Self::default()
     }
 
+    /// Reconstruct a log from previously stored leaf hashes (e.g. loaded from DB).
+    /// Does not recompute hashes — trusts the stored values.
+    pub fn from_leaf_hashes(leaves: Vec<[u8; 32]>) -> Self {
+        Self { leaves }
+    }
+
     /// Append a leaf for a new message. Returns the leaf hash.
     pub fn add_leaf(
         &mut self,
@@ -33,12 +39,7 @@ impl MerkleLog {
         timestamp: i64,
         seq: u64,
     ) -> [u8; 32] {
-        let mut hasher = Sha256::new();
-        hasher.update(signature.to_bytes());
-        hasher.update(acte_uuid.as_bytes());
-        hasher.update(timestamp.to_le_bytes());
-        hasher.update(seq.to_le_bytes());
-        let leaf: [u8; 32] = hasher.finalize().into();
+        let leaf = leaf_hash(signature, acte_uuid, timestamp, seq);
         self.leaves.push(leaf);
         leaf
     }
@@ -96,6 +97,21 @@ impl MerkleLog {
 
         &current == root
     }
+}
+
+/// Compute the leaf hash for a single message without appending to any log.
+pub fn leaf_hash(
+    signature: &ed25519_dalek::Signature,
+    acte_uuid: &uuid::Uuid,
+    timestamp: i64,
+    seq: u64,
+) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(signature.to_bytes());
+    hasher.update(acte_uuid.as_bytes());
+    hasher.update(timestamp.to_le_bytes());
+    hasher.update(seq.to_le_bytes());
+    hasher.finalize().into()
 }
 
 fn compute_root(nodes: &[[u8; 32]]) -> [u8; 32] {

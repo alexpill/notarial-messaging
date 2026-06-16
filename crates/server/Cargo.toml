@@ -34,5 +34,16 @@ ed25519-dalek    = { workspace = true }
 x25519-dalek     = { workspace = true }
 # Décoder HSM_MASTER_KEY_HEX et EN_SIGNING_KEY_HEX depuis l'env
 hex              = "0.4"
+async-trait      = "0.1"
+base64           = { workspace = true }
+hkdf             = { workspace = true }
+sha2             = { workspace = true }
 # Gestion d'erreurs avec context dans main
 anyhow           = "1"
+rand             = { workspace = true }
+
+[dev-dependencies]
+localpki-core    = { path = "../localpki-core" }
+messaging-crypto = { path = "../messaging-crypto" }
+tower            = { version = "0.4", features = ["util"] }
+http-body-util   = "0.1"

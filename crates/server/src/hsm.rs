@@ -12,6 +12,10 @@ pub struct HsmSimulator {
 }
 
 impl HsmSimulator {
+    pub fn new(master_key: [u8; 32]) -> Self {
+        Self { master_key: Zeroizing::new(master_key) }
+    }
+
     pub fn from_env() -> Result<Self, AppError> {
         let hex = std::env::var("HSM_MASTER_KEY_HEX")
             .map_err(|_| AppError::Config("HSM_MASTER_KEY_HEX: missing".to_string()))?;

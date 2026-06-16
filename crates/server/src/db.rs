@@ -31,6 +31,20 @@ pub fn init_pool(database_url: &str) -> Result<DbPool, AppError> {
     Ok(pool)
 }
 
+/// Creates a single-connection in-memory pool and runs migrations. Use in tests only.
+pub fn init_pool_for_test() -> Result<DbPool, AppError> {
+    let manager = ConnectionManager::<SqliteConnection>::new(":memory:");
+    let pool = Pool::builder()
+        .max_size(1)
+        .build(manager)
+        .map_err(|e| AppError::Config(format!("test pool: {e}")))?;
+    let mut conn = pool.get()
+        .map_err(|e| AppError::Database(e.to_string()))?;
+    conn.run_pending_migrations(MIGRATIONS)
+        .map_err(|e| AppError::Database(format!("test migration: {e}")))?;
+    Ok(pool)
+}
+
 /// Runs a synchronous Diesel closure on Tokio's blocking thread pool.
 ///
 /// ```rust

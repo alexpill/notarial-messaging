@@ -13,12 +13,19 @@ messaging-crypto = { path = "../messaging-crypto" }
 tokio            = { workspace = true }
 serde            = { workspace = true }
 serde_json       = { workspace = true }
-# Parser d'arguments CLI avec derive
+ed25519-dalek    = { workspace = true }
+x25519-dalek     = { workspace = true }
+base64           = { workspace = true }
+uuid             = { workspace = true }
+zeroize          = { workspace = true, features = ["derive"] }
+sha2             = { workspace = true }
+rand             = { workspace = true }
+thiserror        = { workspace = true }
 clap             = { version = "4", features = ["derive"] }
-# Client HTTP pour appeler le serveur
-reqwest          = { version = "0.11", features = ["json"] }
-# Couleurs dans le terminal pour la démo
+reqwest          = { version = "0.12", features = ["json"] }
 colored          = "2"
-# Barres de progression pour le scénario automatique
 indicatif        = "0.17"
 anyhow           = "1"
+hex              = "0.4"
+dotenvy          = "0.15"
+rusqlite         = { version = "0.31", features = ["bundled"] }

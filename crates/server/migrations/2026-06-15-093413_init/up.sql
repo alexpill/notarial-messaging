@@ -41,7 +41,7 @@ CREATE TABLE messages (
 CREATE UNIQUE INDEX messages_acte_seq ON messages(acte_uuid, seq);
 
 CREATE TABLE merkle_log (
-    id          BIGINT  NOT NULL PRIMARY KEY,
+    id          INTEGER PRIMARY KEY,
     acte_uuid   TEXT    NOT NULL REFERENCES actes(uuid),
     message_id  TEXT    NOT NULL REFERENCES messages(id),
     leaf_hash   TEXT    NOT NULL,

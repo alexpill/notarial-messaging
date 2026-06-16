@@ -1,10 +1,12 @@
 // Message encryption and signing.
 //
-// Send (Alice): derive K_send → AES-256-GCM(K_send, M, AAD) + Ed25519.Sign(sk, H(M || context))
-// Receive (Bob): derive K_send_Alice → decrypt → verify signature
+// Send (Alice): derive K_send → AES-256-GCM(K_send, M, AAD) + Ed25519.Sign(sk, H(C || context))
+// Receive (Bob): verify signature on ciphertext → derive K_send_Alice → decrypt
 //
-// The server stores only ciphertext + signature. It can verify the signature (pk is public)
-// but never reads the plaintext.
+// The signature is computed over the *ciphertext*, not the plaintext. This lets the server
+// reject forgeries without ever reading the message. Non-repudiation on the cleartext is
+// preserved because AES-GCM is AEAD: a given (ciphertext, nonce, AAD, key) tuple decrypts
+// to exactly one plaintext or fails. See ARCHITECTURE.md §5.3.
 
 use aes_gcm::{aead::{Aead, KeyInit, Payload}, Aes256Gcm};
 use ed25519_dalek::{ed25519::signature::Signer, Verifier};
@@ -19,7 +21,7 @@ use serde::{Deserialize, Serialize};
 pub struct EncryptedMessage {
     pub ciphertext: Vec<u8>,
     pub nonce: [u8; 12],
-    /// Ed25519(sk_sender, SHA256(plaintext || acte_uuid || timestamp || SN_sender))
+    /// Ed25519(sk_sender, SHA256(ciphertext || nonce || acte_uuid || timestamp || SN_sender))
     pub signature: ed25519_dalek::Signature,
     /// Monotonic sequence number within the acte, assigned by the server.
     pub seq: u64,
@@ -69,24 +71,26 @@ pub fn decrypt_message(
 
 pub fn sign_message(
     signing_key: &ed25519_dalek::SigningKey,
-    plaintext: &[u8],
+    ciphertext: &[u8],
+    nonce: &[u8; 12],
     acte_uuid: &uuid::Uuid,
     sender_sn: &SerialNumber,
     timestamp: i64,
 ) -> ed25519_dalek::Signature {
-    signing_key.sign(&Sha256::digest(&signing_payload(plaintext, acte_uuid, timestamp, sender_sn)))
+    signing_key.sign(&Sha256::digest(&signing_payload(ciphertext, nonce, acte_uuid, timestamp, sender_sn)))
 }
 
 pub fn verify_message_signature(
     verifying_key: &ed25519_dalek::VerifyingKey,
-    plaintext: &[u8],
+    ciphertext: &[u8],
+    nonce: &[u8; 12],
     acte_uuid: &uuid::Uuid,
     sender_sn: &SerialNumber,
     timestamp: i64,
     signature: &ed25519_dalek::Signature,
 ) -> Result<(), CryptoError> {
     verifying_key
-        .verify(&Sha256::digest(&signing_payload(plaintext, acte_uuid, timestamp, sender_sn)), signature)
+        .verify(&Sha256::digest(&signing_payload(ciphertext, nonce, acte_uuid, timestamp, sender_sn)), signature)
         .map_err(|_| CryptoError::InvalidMessageSignature)
 }
 
@@ -99,10 +103,17 @@ fn build_aad(acte_uuid: &uuid::Uuid, timestamp: i64, sn: &SerialNumber) -> Vec<u
     aad
 }
 
-/// Signing payload: plaintext || acte_uuid (16) || timestamp (8, LE) || SN (16).
-fn signing_payload(plaintext: &[u8], acte_uuid: &uuid::Uuid, timestamp: i64, sn: &SerialNumber) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(plaintext.len() + 40);
-    payload.extend_from_slice(plaintext);
+/// Signing payload: ciphertext || nonce (12) || acte_uuid (16) || timestamp (8, LE) || SN (16).
+fn signing_payload(
+    ciphertext: &[u8],
+    nonce: &[u8; 12],
+    acte_uuid: &uuid::Uuid,
+    timestamp: i64,
+    sn: &SerialNumber,
+) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(ciphertext.len() + 52);
+    payload.extend_from_slice(ciphertext);
+    payload.extend_from_slice(nonce);
     payload.extend_from_slice(acte_uuid.as_bytes());
     payload.extend_from_slice(&timestamp.to_le_bytes());
     payload.extend_from_slice(&sn.0);

@@ -9,8 +9,14 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use diesel::prelude::*;
-use messaging_crypto::merkle::{MerkleLog, leaf_hash};
+use localpki_core::cert::SerialNumber;
+use ed25519_dalek::Signer;
+use messaging_crypto::{
+    merkle::{MerkleLog, leaf_hash},
+    messages::verify_message_signature,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -20,8 +26,8 @@ pub struct SendMessageRequest {
     pub c_message: String,
     /// 96-bit AES-GCM nonce. base64url.
     pub nonce: String,
-    /// Ed25519(sk_sender, SHA256(plaintext || acte_uuid || timestamp || SN)). base64url.
-    /// Stored as-is — server does not verify (content is encrypted).
+    /// Ed25519(sk_sender, SHA256(c_message || nonce || acte_uuid || timestamp || SN)). base64url.
+    /// Verified server-side against pk_sender before insert.
     pub signature: String,
     pub timestamp: i64,
 }
@@ -59,15 +65,56 @@ pub async fn send_message(
 
     let sig_bytes: [u8; 64] = crate::utils::decode_b64(&req.signature, "signature")?;
     let signature = ed25519_dalek::Signature::from_bytes(&sig_bytes);
+    let nonce_bytes: [u8; 12] = crate::utils::decode_b64(&req.nonce, "nonce")?;
+    let ciphertext_bytes = URL_SAFE_NO_PAD
+        .decode(&req.c_message)
+        .map_err(|_| AppError::BadRequest("c_message: invalid base64url".into()))?;
+
+    // Verify SIG_sender with pk_sender (extracted from the LocalPKI registry).
+    // The signature is over the ciphertext, so the server can reject forgeries without
+    // ever reading the plaintext. See ARCHITECTURE.md §5.3.
+    let sender_sn_bytes: [u8; 16] = hex::decode(&caller_sn)
+        .ok()
+        .and_then(|b| b.try_into().ok())
+        .ok_or_else(|| AppError::BadRequest("sender SN: invalid hex".into()))?;
+    let sender_sn = SerialNumber(sender_sn_bytes);
+
+    let pk_b64 = registry::get_public_key(&state.db, caller_sn.clone())
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+    let pk_bytes: [u8; 32] = URL_SAFE_NO_PAD
+        .decode(&pk_b64)
+        .ok()
+        .and_then(|b| b.try_into().ok())
+        .ok_or_else(|| AppError::Database("malformed pk in registry".into()))?;
+    let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&pk_bytes)
+        .map_err(|_| AppError::Database("invalid Ed25519 pk in registry".into()))?;
+
+    verify_message_signature(
+        &verifying_key,
+        &ciphertext_bytes,
+        &nonce_bytes,
+        &acte_uuid,
+        &sender_sn,
+        req.timestamp,
+        &signature,
+    )?;
 
     let msg_id = uuid::Uuid::new_v4().to_string();
     let now = crate::utils::unix_now()?;
+
+    // Clone the EN signing key out of the mutex so the DB closure can sign without
+    // holding the global lock across the transaction.
+    let en_sk = state
+        .en_signing_key
+        .lock()
+        .map_err(|_| AppError::Database("EN signing key mutex poisoned".into()))?
+        .clone();
 
     // Move request fields into the closure; keep clones for the response.
     let c_message = req.c_message;
     let nonce = req.nonce;
     let sig_b64 = req.signature;
-    let timestamp = req.timestamp;
 
     let msg_id_resp = msg_id.clone();
     let c_message_resp = c_message.clone();
@@ -77,8 +124,11 @@ pub async fn send_message(
     let acte_id_resp = acte_id.clone();
 
     // Atomic: SELECT MAX(seq) + INSERT message + INSERT merkle_log in one transaction.
+    // The new merkle_log row also carries the post-insert Merkle root and the EN
+    // signature over that root — turning the append-only log into a proper
+    // transparency log auditable end-to-end (cf. ARCHITECTURE.md §6).
     let seq = crate::db::run_db(&state.db, move |conn| {
-        conn.transaction(|conn| {
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
             use crate::db::schema::{merkle_log, messages};
             use diesel::dsl::max;
 
@@ -88,7 +138,42 @@ pub async fn send_message(
                 .first::<Option<i64>>(conn)?
                 .unwrap_or(-1) + 1;
 
-            let leaf = leaf_hash(&signature, &acte_uuid, timestamp, next_seq as u64);
+            // Merkle leaf binds to the server's `now`, not the client-supplied timestamp:
+            // a malicious client could otherwise backdate/forward-date its position in the
+            // transparency log. Client `req.timestamp` remains covered by the signature/AAD
+            // — auditors compare the two to detect clock skew or client lies.
+            let leaf = leaf_hash(&signature, &acte_uuid, now, next_seq as u64);
+
+            // Rebuild the log from prior leaves + this one to compute the new root,
+            // then sign it with the EN key. The signature in this row attests:
+            //   "the EN saw a log whose root was R after appending message msg_id."
+            let prior_leaves_hex: Vec<String> = merkle_log::table
+                .filter(merkle_log::acte_uuid.eq(&acte_id))
+                .order(merkle_log::id.asc())
+                .select(merkle_log::leaf_hash)
+                .load::<String>(conn)?;
+
+            let mut leaves: Vec<[u8; 32]> = Vec::with_capacity(prior_leaves_hex.len() + 1);
+            for h in prior_leaves_hex {
+                let bytes = hex::decode(&h).map_err(|_| {
+                    diesel::result::Error::DeserializationError(
+                        "malformed leaf hash in merkle_log".into(),
+                    )
+                })?;
+                let arr: [u8; 32] = bytes.try_into().map_err(|_| {
+                    diesel::result::Error::DeserializationError(
+                        "leaf hash must be 32 bytes".into(),
+                    )
+                })?;
+                leaves.push(arr);
+            }
+            leaves.push(leaf);
+
+            let log = MerkleLog::from_leaf_hashes(leaves);
+            let root = log.root().ok_or_else(|| {
+                diesel::result::Error::DeserializationError("empty merkle log after append".into())
+            })?;
+            let en_sig = en_sk.sign(&root);
 
             diesel::insert_into(messages::table)
                 .values(NewMessage {
@@ -103,13 +188,16 @@ pub async fn send_message(
                 })
                 .execute(conn)?;
 
+            let root_hex = hex::encode(root);
+            let en_sig_hex = hex::encode(en_sig.to_bytes());
+
             diesel::insert_into(merkle_log::table)
                 .values(NewMerkleEntry {
                     acte_uuid: &acte_id,
                     message_id: &msg_id,
                     leaf_hash: &hex::encode(leaf),
-                    parent_hash: None,
-                    en_signature: None,
+                    parent_hash: Some(&root_hex),
+                    en_signature: Some(&en_sig_hex),
                     logged_at: now,
                 })
                 .execute(conn)?;
@@ -150,19 +238,27 @@ pub async fn list_messages(
     Path(acte_id): Path<String>,
     Query(params): Query<ListMessagesQuery>,
 ) -> Result<Json<Vec<MessageResponse>>, AppError> {
-    registry::get_participant_key(&state.db, acte_id.clone(), caller_sn)
+    let participant = registry::get_participant_entry(&state.db, acte_id.clone(), caller_sn)
         .await?
         .ok_or(AppError::Unauthorized)?;
 
     let after_seq = params.after_seq.unwrap_or(-1);
+    let history_from = participant.history_from;
 
     let rows = crate::db::run_db(&state.db, move |conn| {
         use crate::db::schema::messages::dsl::*;
-        messages
+        let base = messages
             .filter(acte_uuid.eq(&acte_id))
-            .filter(seq.gt(after_seq))
-            .order(seq.asc())
-            .load::<crate::db::models::Message>(conn)
+            .filter(seq.gt(after_seq));
+
+        if let Some(ts) = history_from {
+            base.filter(sent_at.ge(ts))
+                .order(seq.asc())
+                .load::<crate::db::models::Message>(conn)
+        } else {
+            base.order(seq.asc())
+                .load::<crate::db::models::Message>(conn)
+        }
     })
     .await?;
 
@@ -191,19 +287,19 @@ pub async fn get_merkle_root(
         .await?
         .ok_or(AppError::Unauthorized)?;
 
-    let leaves_hex = crate::db::run_db(&state.db, move |conn| {
+    let rows = crate::db::run_db(&state.db, move |conn| {
         use crate::db::schema::merkle_log::dsl::*;
         merkle_log
             .filter(acte_uuid.eq(&acte_id))
             .order(id.asc())
-            .select(leaf_hash)
-            .load::<String>(conn)
+            .select((leaf_hash, parent_hash, en_signature))
+            .load::<(String, Option<String>, Option<String>)>(conn)
     })
     .await?;
 
-    let leaves: Vec<[u8; 32]> = leaves_hex
+    let leaves: Vec<[u8; 32]> = rows
         .iter()
-        .map(|h| -> Result<[u8; 32], AppError> {
+        .map(|(h, _, _)| -> Result<[u8; 32], AppError> {
             hex::decode(h)
                 .map_err(|_| AppError::Database("malformed leaf hash in merkle_log".into()))?
                 .try_into()
@@ -216,9 +312,15 @@ pub async fn get_merkle_root(
         .root()
         .map(|r| hex::encode(r));
 
+    // The EN signature on the most recent row attests to the current root.
+    // Older rows keep their own (root, signature) pair so any historical state is auditable.
+    let latest_en_signature = rows.last().and_then(|(_, _, sig)| sig.clone());
+    let latest_signed_root = rows.last().and_then(|(_, root_hex, _)| root_hex.clone());
+
     Ok(Json(serde_json::json!({
         "root": root,
         "leaves_count": count,
-        "en_signature": null,
+        "en_signature": latest_en_signature,
+        "signed_root": latest_signed_root,
     })))
 }

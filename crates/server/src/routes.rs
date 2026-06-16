@@ -22,10 +22,11 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         // LocalPKI EN
         .route("/enroll", post(enrollment::enroll))
+        .route("/enroll/prepare", post(enrollment::prepare_tbs))
         .route("/auth/verify", post(authentication::verify))
         .route("/identity/:sn", get(enrollment::get_identity))
         // Actes
-        .route("/actes", post(actes::create_acte))
+        .route("/actes", get(actes::list_actes).post(actes::create_acte))
         .route("/actes/:id", get(actes::get_acte))
         .route("/actes/:id/keys", get(actes::get_acte_key))
         // Participants

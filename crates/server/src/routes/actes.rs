@@ -38,6 +38,27 @@ struct ParticipantEntry {
     c_acte_key: String,
 }
 
+/// Returns all actes where the authenticated user is a participant.
+pub async fn list_actes(
+    AuthenticatedSn(caller_sn): AuthenticatedSn,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<ActeResponse>>, AppError> {
+    let actes = registry::list_actes_for_participant(&state.db, caller_sn).await?;
+
+    let mut responses = Vec::with_capacity(actes.len());
+    for acte in actes {
+        let parties = registry::list_participant_sns(&state.db, acte.uuid.clone()).await?;
+        responses.push(ActeResponse {
+            uuid: acte.uuid,
+            titre: acte.titre,
+            notaire_sn: acte.notaire_sn,
+            parties,
+            created_at: acte.created_at,
+        });
+    }
+    Ok(Json(responses))
+}
+
 /// The only route that calls HsmSimulator::derive_k_acte().
 /// Generates K_acte, encrypts it for each participant + HSM archive, stores in DB.
 pub async fn create_acte(

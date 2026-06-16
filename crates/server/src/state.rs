@@ -27,6 +27,27 @@ impl AppState {
             ws_channels: Mutex::new(HashMap::new()),
         })
     }
+
+    /// Builds a test AppState with random EN keys and a fixed test config.
+    /// Use `init_pool_for_test()` to create the DB pool.
+    pub fn new_for_test(db: DbPool, hsm: HsmSimulator) -> Self {
+        let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
+        let verifying_key = signing_key.verifying_key();
+        let config = AppConfig {
+            database_url: String::new(),
+            server_host: "127.0.0.1".to_string(),
+            server_port: 3000,
+            frontend_origin: "http://localhost:5173".to_string(),
+        };
+        Self {
+            db,
+            hsm: Mutex::new(hsm),
+            config,
+            en_verifying_key: verifying_key,
+            en_signing_key: Mutex::new(signing_key),
+            ws_channels: Mutex::new(HashMap::new()),
+        }
+    }
 }
 
 fn load_en_keys(

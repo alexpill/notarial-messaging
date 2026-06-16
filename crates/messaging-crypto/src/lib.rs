@@ -111,14 +111,16 @@ mod tests {
     #[test]
     fn sign_and_verify_message() {
         let kp = keypair();
+        let k_acte = [7u8; 32];
         let sender = sn(20);
         let uuid = Uuid::new_v4();
         let timestamp = 1_700_000_000i64;
         let plaintext = b"acte notarial";
 
-        let sig = sign_message(&kp.signing_key, plaintext, &uuid, &sender, timestamp);
+        let (ct, nonce) = encrypt_message(&k_acte, plaintext, &uuid, &sender, timestamp).unwrap();
+        let sig = sign_message(&kp.signing_key, &ct, &nonce, &uuid, &sender, timestamp);
         assert!(
-            verify_message_signature(&kp.verifying_key, plaintext, &uuid, &sender, timestamp, &sig)
+            verify_message_signature(&kp.verifying_key, &ct, &nonce, &uuid, &sender, timestamp, &sig)
                 .is_ok()
         );
     }
@@ -126,13 +128,19 @@ mod tests {
     #[test]
     fn tampered_message_fails_verification() {
         let kp = keypair();
+        let k_acte = [7u8; 32];
         let sender = sn(20);
         let uuid = Uuid::new_v4();
         let timestamp = 1_700_000_000i64;
 
-        let sig = sign_message(&kp.signing_key, b"original", &uuid, &sender, timestamp);
+        let (ct, nonce) = encrypt_message(&k_acte, b"original", &uuid, &sender, timestamp).unwrap();
+        let sig = sign_message(&kp.signing_key, &ct, &nonce, &uuid, &sender, timestamp);
+
+        // Flip a bit in the ciphertext.
+        let mut tampered = ct.clone();
+        tampered[0] ^= 0x01;
         assert!(
-            verify_message_signature(&kp.verifying_key, b"tampered", &uuid, &sender, timestamp, &sig)
+            verify_message_signature(&kp.verifying_key, &tampered, &nonce, &uuid, &sender, timestamp, &sig)
                 .is_err()
         );
     }
@@ -144,12 +152,24 @@ mod tests {
         assert!(MerkleLog::new().root().is_none());
     }
 
+    fn sign_for_test(
+        kp: &KeyPair,
+        msg: &[u8],
+        uuid: &Uuid,
+        sender: &SerialNumber,
+        timestamp: i64,
+    ) -> ed25519_dalek::Signature {
+        let k_acte = [9u8; 32];
+        let (ct, nonce) = encrypt_message(&k_acte, msg, uuid, sender, timestamp).unwrap();
+        sign_message(&kp.signing_key, &ct, &nonce, uuid, sender, timestamp)
+    }
+
     #[test]
     fn merkle_single_leaf_root_equals_leaf() {
         let kp = keypair();
         let uuid = Uuid::new_v4();
         let mut log = MerkleLog::new();
-        let sig = sign_message(&kp.signing_key, b"msg", &uuid, &sn(1), 1000);
+        let sig = sign_for_test(&kp, b"msg", &uuid, &sn(1), 1000);
 
         let leaf = log.add_leaf(&sig, &uuid, 1000, 0);
         assert_eq!(log.root().unwrap(), leaf);
@@ -160,21 +180,17 @@ mod tests {
         let kp = keypair();
         let uuid = Uuid::new_v4();
         let mut log = MerkleLog::new();
+        let mut leaves = Vec::new();
 
         for (i, msg) in [b"msg0" as &[u8], b"msg1", b"msg2", b"msg3"].iter().enumerate() {
-            let sig = sign_message(&kp.signing_key, msg, &uuid, &sn(1), i as i64);
-            log.add_leaf(&sig, &uuid, i as i64, i as u64);
+            let sig = sign_for_test(&kp, msg, &uuid, &sn(1), i as i64);
+            leaves.push(log.add_leaf(&sig, &uuid, i as i64, i as u64));
         }
 
         let root = log.root().unwrap();
         for i in 0..4 {
             let proof = log.proof(i).unwrap();
-            let _leaf = log.proof(i).unwrap().leaf_index;
-            // Recompute leaf hash to pass to verify_proof.
-            let sig = sign_message(&kp.signing_key, [b"msg0", b"msg1", b"msg2", b"msg3"][i], &uuid, &sn(1), i as i64);
-            let mut fresh_log = MerkleLog::new();
-            let leaf_hash = fresh_log.add_leaf(&sig, &uuid, i as i64, i as u64);
-            assert!(MerkleLog::verify_proof(&root, &leaf_hash, &proof), "proof failed for leaf {i}");
+            assert!(MerkleLog::verify_proof(&root, &leaves[i], &proof), "proof failed for leaf {i}");
         }
     }
 
@@ -187,7 +203,7 @@ mod tests {
         let mut leaves = Vec::new();
 
         for (i, msg) in messages.iter().enumerate() {
-            let sig = sign_message(&kp.signing_key, msg, &uuid, &sn(1), i as i64);
+            let sig = sign_for_test(&kp, msg, &uuid, &sn(1), i as i64);
             leaves.push(log.add_leaf(&sig, &uuid, i as i64, i as u64));
         }
 
@@ -203,7 +219,7 @@ mod tests {
         let kp = keypair();
         let uuid = Uuid::new_v4();
         let mut log = MerkleLog::new();
-        let sig = sign_message(&kp.signing_key, b"msg", &uuid, &sn(1), 0);
+        let sig = sign_for_test(&kp, b"msg", &uuid, &sn(1), 0);
         let leaf = log.add_leaf(&sig, &uuid, 0, 0);
         let proof = log.proof(0).unwrap();
         let wrong_root = [0u8; 32];
