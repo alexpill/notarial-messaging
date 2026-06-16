@@ -83,6 +83,10 @@ export async function authVerify(certJson: unknown): Promise<AuthVerifyResponse>
 	return request('POST', '/auth/verify', { cert: certJson });
 }
 
+export async function enrollSelf(certJson: unknown): Promise<EnrollResponse> {
+	return request('POST', '/enroll/self', { cert: certJson });
+}
+
 export async function getIdentity(
 	sn: string
 ): Promise<{ sn: string; pk: string; display_name: string | null; registered_at: number }> {

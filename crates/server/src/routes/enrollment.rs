@@ -182,9 +182,59 @@ pub async fn prepare_tbs(
     }))
 }
 
-// `lra_sign` endpoint deliberately removed. Endorsements must be produced by an
-// authenticated LRA (notaire) signing the cert with their own private key on
-// the client side — see frontend `/notaire/enroller` and demo-cli `enroller`.
-// The EN now exposes only `POST /enroll`, which validates the LRA's Ed25519
-// signature against the pk recorded in the registry. This keeps the EN minimal
-// (it never holds an LRA key) and matches Dumas et al. §1.2, §2.1.
+// ─── Self-enrollment (demo/bootstrap) ────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct EnrollSelfRequest {
+    pub cert: serde_json::Value,
+}
+
+/// One-shot enrollment using the server's Root LRA. The client presents its
+/// self-signed cert and the server endorses it immediately.
+/// This exists solely to make the demo work without a separate notaire session:
+/// the correcteur opens the frontend, generates keys, and is enrolled in one click.
+pub async fn enroll_self(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<EnrollSelfRequest>,
+) -> Result<(StatusCode, Json<EnrollResponse>), AppError> {
+    let cert: LocalPKICert = serde_json::from_value(req.cert)
+        .map_err(|e| AppError::BadRequest(format!("invalid certificate: {e}")))?;
+
+    verify_signature_id(&cert)
+        .map_err(|_| AppError::BadRequest("invalid signature ID (SI)".into()))?;
+
+    cert.tbs
+        .validity
+        .check(crate::utils::unix_now()?)
+        .map_err(|e| AppError::BadRequest(format!("certificate validity: {e}")))?;
+
+    let sn_hex = hex::encode(cert.tbs.serial_number.0);
+
+    let tbs_der = cert
+        .tbs
+        .to_der()
+        .map_err(|e| AppError::BadRequest(format!("DER encoding failed: {e}")))?;
+
+    registry::insert_identity(
+        &state.db,
+        NewIdentity {
+            sn: &sn_hex,
+            si: &URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes()),
+            pk: &URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes()),
+            tbs_der: &URL_SAFE_NO_PAD.encode(&tbs_der),
+            subject_id: &cert.tbs.subject_id,
+            lra_id: &state.root_lra_sn,
+            registered_at: crate::utils::unix_now()?,
+            revoked_at: None,
+        },
+    )
+    .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(EnrollResponse {
+            serial_number: sn_hex,
+            message: "enrolled via root LRA".to_string(),
+        }),
+    ))
+}

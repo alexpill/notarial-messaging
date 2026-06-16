@@ -25,12 +25,11 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::init_pool(&config.database_url)?;
     let hsm = hsm::HsmSimulator::from_env()?;
 
-    // The server holds no Root LRA. Bootstrap is the operator's job: run
-    // `demo-cli scenario` (or a dedicated bootstrap command) which seeds a
-    // Root LRA directly in SQLite and enrolls the first notaire. The EN's
-    // job stops at storing `(SN, SI, pk, lra_id)` — no LRA key lives here.
+    let en_url = format!("http://{}:{}", config.server_host, config.server_port);
+    let (root_lra_kp, root_lra_sn) = en::registry::seed_root_lra(&pool, &en_url).await?;
+    tracing::info!("Root LRA seeded — SN: {}", root_lra_sn);
 
-    let state = Arc::new(state::AppState::new(pool, hsm, config.clone())?);
+    let state = Arc::new(state::AppState::new(pool, hsm, config.clone(), root_lra_kp.signing_key, root_lra_sn)?);
     let app = routes::build_router(state);
 
     let addr = format!("{}:{}", config.server_host, config.server_port);
