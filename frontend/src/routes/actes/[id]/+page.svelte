@@ -153,10 +153,11 @@
 		};
 		if (!kActe) return base;
 
+		const ciphertext = fromBase64url(m.c_message);
+		const nonce = fromBase64url(m.nonce);
+
 		let plaintext: Uint8Array;
 		try {
-			const ciphertext = fromBase64url(m.c_message);
-			const nonce = fromBase64url(m.nonce);
 			plaintext = decryptMessage(kActe, m.sender_sn, ciphertext, nonce, m.acte_uuid, m.sent_at);
 		} catch {
 			return base; // decryption failed, leave text + sigValid null
@@ -169,7 +170,7 @@
 			display_name = displayName;
 			if (senderPk) {
 				const sig = fromBase64url(m.signature);
-				sigValid = verifyMessageSignature(senderPk, plaintext, m.acte_uuid, m.sender_sn, m.sent_at, sig);
+				sigValid = verifyMessageSignature(senderPk, ciphertext, nonce, m.acte_uuid, m.sender_sn, m.sent_at, sig);
 			}
 		} catch {
 			sigValid = false;
@@ -239,7 +240,7 @@
 			const signingKey = fromBase64url(identity.signingKey);
 
 			const { ciphertext, nonce } = encryptMessage(kActe, plaintext, acteId, identity.sn_hex, timestamp);
-			const sig = signMessage(signingKey, plaintext, acteId, identity.sn_hex, timestamp);
+			const sig = signMessage(signingKey, ciphertext, nonce, acteId, identity.sn_hex, timestamp);
 
 			await sendMessage(
 				token,

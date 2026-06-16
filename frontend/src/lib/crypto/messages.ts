@@ -4,7 +4,7 @@
  * K_acte = HKDF(key=kMaster, info="notariat-msg-v1" || UUID(16), len=32)
  * K_send = HKDF(key=kActe, info="send" || SN(16), len=32)
  * encrypt: AES-256-GCM(K_send, plaintext, AAD=UUID(16)||ts(8 LE)||SN(16))
- * sign:    Ed25519(sk, SHA256(plaintext || UUID(16) || ts(8 LE) || SN(16)))
+ * sign:    Ed25519(sk, SHA256(ciphertext || nonce(12) || UUID(16) || ts(8 LE) || SN(16)))
  */
 
 import { ed25519 } from '@noble/curves/ed25519.js';
@@ -46,8 +46,11 @@ function buildAad(acteUuid: string, timestamp: number, snHex: string): Uint8Arra
 	return aad;
 }
 
+// Signing payload: ciphertext || nonce(12) || UUID(16) || ts(8 LE) || SN(16)
+// Mirrors messaging_crypto::messages::signing_payload in Rust.
 function buildSigningPayload(
-	plaintext: Uint8Array,
+	ciphertext: Uint8Array,
+	nonce: Uint8Array,
 	acteUuid: string,
 	timestamp: number,
 	snHex: string
@@ -55,14 +58,12 @@ function buildSigningPayload(
 	const uuidBytes = uuidToBytes(acteUuid);
 	const tsBytes = timestampToLeBytes(timestamp);
 	const snBytes = hexToBytes(snHex);
-	const payload = new Uint8Array(plaintext.length + 16 + 8 + 16);
+	const payload = new Uint8Array(ciphertext.length + 12 + 16 + 8 + 16);
 	let offset = 0;
-	payload.set(plaintext, offset);
-	offset += plaintext.length;
-	payload.set(uuidBytes, offset);
-	offset += 16;
-	payload.set(tsBytes, offset);
-	offset += 8;
+	payload.set(ciphertext, offset); offset += ciphertext.length;
+	payload.set(nonce, offset);      offset += 12;
+	payload.set(uuidBytes, offset);  offset += 16;
+	payload.set(tsBytes, offset);    offset += 8;
 	payload.set(snBytes, offset);
 	return payload;
 }
@@ -102,26 +103,28 @@ export function decryptMessage(
 
 export function signMessage(
 	signingKey: Uint8Array,
-	plaintext: Uint8Array,
+	ciphertext: Uint8Array,
+	nonce: Uint8Array,
 	acteUuid: string,
 	senderSnHex: string,
 	timestamp: number
 ): Uint8Array {
-	const payload = buildSigningPayload(plaintext, acteUuid, timestamp, senderSnHex);
+	const payload = buildSigningPayload(ciphertext, nonce, acteUuid, timestamp, senderSnHex);
 	const digest = sha256(payload);
 	return ed25519.sign(digest, signingKey);
 }
 
 export function verifyMessageSignature(
 	verifyingKey: Uint8Array,
-	plaintext: Uint8Array,
+	ciphertext: Uint8Array,
+	nonce: Uint8Array,
 	acteUuid: string,
 	senderSnHex: string,
 	timestamp: number,
 	signature: Uint8Array
 ): boolean {
 	try {
-		const payload = buildSigningPayload(plaintext, acteUuid, timestamp, senderSnHex);
+		const payload = buildSigningPayload(ciphertext, nonce, acteUuid, timestamp, senderSnHex);
 		const digest = sha256(payload);
 		return ed25519.verify(signature, digest, verifyingKey);
 	} catch {
