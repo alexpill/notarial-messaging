@@ -33,7 +33,12 @@ pub fn seed_root_lra(db_path: &str, en_url: &str) -> anyhow::Result<RootLra> {
     let sn_hex = hex::encode(sn.0);
     let si_b64 = URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes());
     let pk_b64 = URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes());
-    let tbs_json = serde_json::to_string(&cert.tbs)?;
+    let tbs_der_b64 = URL_SAFE_NO_PAD.encode(
+        cert.tbs
+            .to_der()
+            .map_err(|e| anyhow::anyhow!("tbs DER encoding: {e:?}"))?,
+    );
+    let subject_id = cert.tbs.subject_id.clone();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs() as i64;
@@ -43,9 +48,9 @@ pub fn seed_root_lra(db_path: &str, en_url: &str) -> anyhow::Result<RootLra> {
 
     conn.execute(
         "INSERT OR IGNORE INTO identities \
-         (sn, si, pk, tbs_cert, lra_id, registered_at, revoked_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)",
-        rusqlite::params![sn_hex, si_b64, pk_b64, tbs_json, sn_hex, now],
+         (sn, si, pk, tbs_der, subject_id, lra_id, registered_at, revoked_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL)",
+        rusqlite::params![sn_hex, si_b64, pk_b64, tbs_der_b64, subject_id, sn_hex, now],
     )
     .context("INSERT root LRA into identities")?;
 

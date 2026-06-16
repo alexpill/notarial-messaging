@@ -96,8 +96,13 @@ pub async fn create_acte(
         (Zeroizing::new(hsm.derive_k_acte(&acte_uuid)), hsm.x25519_public_key())
     };
 
-    // Encrypt K_acte for the HSM archive (used to re-derive for future participants).
-    let archive_ct = ecies_encrypt(&hsm_x25519_pk, k_acte.as_ref()).map_err(AppError::Crypto)?;
+    // Encrypt K_acte || acte_uuid for the HSM archive (used to re-derive K_acte
+    // when adding a participant later). The trailing UUID binds the ciphertext to
+    // a specific acte — see ARCHITECTURE.md §4.4 and `HsmSimulator::decrypt_archive`.
+    let mut archive_plaintext = [0u8; 48];
+    archive_plaintext[..32].copy_from_slice(k_acte.as_ref());
+    archive_plaintext[32..].copy_from_slice(acte_uuid.as_bytes());
+    let archive_ct = ecies_encrypt(&hsm_x25519_pk, &archive_plaintext).map_err(AppError::Crypto)?;
     let archive_json = serde_json::to_string(&archive_ct)
         .map_err(|e| AppError::Database(format!("serialization error: {e}")))?;
 

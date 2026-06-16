@@ -11,7 +11,11 @@ pub struct Identity {
     pub sn: String,
     pub si: String,
     pub pk: String,
-    pub tbs_cert: String,
+    /// Exact DER bytes (base64url) that were signed at enrollment. Frozen here
+    /// so SI verification is independent of x509-cert encoder drift.
+    pub tbs_der: String,
+    /// Display label, kept separate from the cryptographic core.
+    pub subject_id: String,
     pub lra_id: String,
     pub registered_at: i64,
     pub revoked_at: Option<i64>,
@@ -23,7 +27,8 @@ pub struct NewIdentity<'a> {
     pub sn: &'a str,
     pub si: &'a str,
     pub pk: &'a str,
-    pub tbs_cert: &'a str,
+    pub tbs_der: &'a str,
+    pub subject_id: &'a str,
     pub lra_id: &'a str,
     pub registered_at: i64,
     pub revoked_at: Option<i64>,

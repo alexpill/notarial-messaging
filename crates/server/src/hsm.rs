@@ -46,14 +46,27 @@ impl HsmSimulator {
         x25519_dalek::PublicKey::from(&*self.derive_hsm_x25519_sk())
     }
 
-    /// Decrypts C_acte_archive → K_acte.
-    /// Only needed when adding a participant (POST /actes/:id/participants) or for legal recovery.
-    pub fn decrypt_archive(&self, ciphertext: &EciesCiphertext) -> Result<[u8; 32], CryptoError> {
+    /// Decrypts C_acte_archive → K_acte and verifies the trailing acte_uuid
+    /// matches `expected_uuid`. ARCHITECTURE.md §4.4 specifies
+    ///   C_acte_archive = ECIES(pk_HSM, K_acte || acte_uuid)
+    /// so an attacker swapping archive ciphertexts between two actes in the DB
+    /// fails the UUID check here. Plaintext layout: 32 bytes K_acte || 16 bytes UUID.
+    pub fn decrypt_archive(
+        &self,
+        ciphertext: &EciesCiphertext,
+        expected_uuid: &uuid::Uuid,
+    ) -> Result<[u8; 32], CryptoError> {
         let sk = self.derive_hsm_x25519_sk();
         let plaintext = ecies_decrypt(&sk, ciphertext)?;
-        plaintext
-            .try_into()
-            .map_err(|_| CryptoError::Decryption)
+        if plaintext.len() != 48 {
+            return Err(CryptoError::Decryption);
+        }
+        if &plaintext[32..] != expected_uuid.as_bytes() {
+            return Err(CryptoError::Decryption);
+        }
+        let mut k_acte = [0u8; 32];
+        k_acte.copy_from_slice(&plaintext[..32]);
+        Ok(k_acte)
     }
 
     /// Derives a stable X25519 static secret from K_master.

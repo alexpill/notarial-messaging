@@ -15,11 +15,12 @@ use diesel::prelude::*;
 
 pub async fn insert_identity(pool: &DbPool, entry: NewIdentity<'_>) -> Result<(), AppError> {
     // Strings must be 'static inside spawn_blocking, so we own them here.
-    let sn       = entry.sn.to_owned();
-    let si       = entry.si.to_owned();
-    let pk       = entry.pk.to_owned();
-    let tbs_cert = entry.tbs_cert.to_owned();
-    let lra_id   = entry.lra_id.to_owned();
+    let sn         = entry.sn.to_owned();
+    let si         = entry.si.to_owned();
+    let pk         = entry.pk.to_owned();
+    let tbs_der    = entry.tbs_der.to_owned();
+    let subject_id = entry.subject_id.to_owned();
+    let lra_id     = entry.lra_id.to_owned();
     let registered_at = entry.registered_at;
 
     run_db(pool, move |conn| {
@@ -29,7 +30,8 @@ pub async fn insert_identity(pool: &DbPool, entry: NewIdentity<'_>) -> Result<()
                 sn: &sn,
                 si: &si,
                 pk: &pk,
-                tbs_cert: &tbs_cert,
+                tbs_der: &tbs_der,
+                subject_id: &subject_id,
                 lra_id: &lra_id,
                 registered_at,
                 revoked_at: None,
@@ -227,8 +229,12 @@ pub async fn seed_root_lra(
     let sn_hex = hex::encode(sn.0);
     let si_b64 = URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes());
     let pk_b64 = URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes());
-    let tbs_json = serde_json::to_string(&cert.tbs)
-        .map_err(|e| AppError::Database(format!("tbs serialization: {e}")))?;
+    let tbs_der_b64 = URL_SAFE_NO_PAD.encode(
+        cert.tbs
+            .to_der()
+            .map_err(|e| AppError::Database(format!("tbs DER encoding: {e}")))?,
+    );
+    let subject_id = cert.tbs.subject_id.clone();
     let now = crate::utils::unix_now()?;
     let sn_hex_db = sn_hex.clone();
 
@@ -239,7 +245,8 @@ pub async fn seed_root_lra(
                 sn: &sn_hex_db,
                 si: &si_b64,
                 pk: &pk_b64,
-                tbs_cert: &tbs_json,
+                tbs_der: &tbs_der_b64,
+                subject_id: &subject_id,
                 lra_id: &sn_hex_db,
                 registered_at: now,
                 revoked_at: None,

@@ -80,7 +80,11 @@ pub async fn add_participant(
         .verify(&Sha256::digest(&payload), &sig)
         .map_err(|_| AppError::BadRequest("notaire signature verification failed".into()))?;
 
-    // Decrypt K_acte from the HSM archive.
+    // Decrypt K_acte from the HSM archive. The archive ciphertext binds K_acte
+    // to the acte UUID (see HsmSimulator::decrypt_archive); we pass the UUID so
+    // a swapped archive row would fail at the UUID check.
+    let acte_uuid = uuid::Uuid::parse_str(&acte_id)
+        .map_err(|_| AppError::BadRequest("invalid acte UUID".into()))?;
     let archive_ct: EciesCiphertext = serde_json::from_str(&acte.c_acte_archive)
         .map_err(|_| AppError::Database("malformed c_acte_archive".into()))?;
     let k_acte = Zeroizing::new(
@@ -88,7 +92,7 @@ pub async fn add_participant(
             .hsm
             .lock()
             .map_err(|_| AppError::Database("HSM lock poisoned".into()))?
-            .decrypt_archive(&archive_ct)
+            .decrypt_archive(&archive_ct, &acte_uuid)
             .map_err(AppError::Crypto)?,
     );
 

@@ -68,8 +68,14 @@ pub async fn enroll(
         .map_err(|_| AppError::BadRequest("LRA signature verification failed".into()))?;
 
     let sn_hex = hex::encode(cert.tbs.serial_number.0);
-    let tbs_json = serde_json::to_string(&cert.tbs)
-        .map_err(|e| AppError::BadRequest(format!("failed to serialize TBSCert: {e}")))?;
+
+    // Freeze the exact DER bytes that the client signed. Re-serializing the
+    // TBSCert at verification time would tie correctness to x509-cert's
+    // encoder being byte-stable across versions — we don't want that coupling.
+    let tbs_der = cert
+        .tbs
+        .to_der()
+        .map_err(|e| AppError::BadRequest(format!("DER encoding failed: {e}")))?;
 
     registry::insert_identity(
         &state.db,
@@ -77,7 +83,8 @@ pub async fn enroll(
             sn: &sn_hex,
             si: &URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes()),
             pk: &URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes()),
-            tbs_cert: &tbs_json,
+            tbs_der: &URL_SAFE_NO_PAD.encode(&tbs_der),
+            subject_id: &cert.tbs.subject_id,
             lra_id: &req.lra_sn,
             registered_at: crate::utils::unix_now()?,
             revoked_at: None,
@@ -102,17 +109,10 @@ pub async fn get_identity(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("identity '{}' not found", sn)))?;
 
-    // Extract display_name from the tbs_cert JSON (subject_id field).
-    // tbs_cert is stored as serde_json::to_string(&TBSCert), so subject_id is always present.
-    let display_name: Option<String> = serde_json::from_str::<serde_json::Value>(&identity.tbs_cert)
-        .ok()
-        .and_then(|v| v["subject_id"].as_str().map(str::to_owned));
-
     Ok(Json(serde_json::json!({
         "sn": identity.sn,
         "pk": identity.pk,
-        "tbs_cert": identity.tbs_cert,
-        "display_name": display_name,
+        "display_name": identity.subject_id,
         "registered_at": identity.registered_at,
     })))
 }

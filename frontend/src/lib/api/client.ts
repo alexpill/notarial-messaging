@@ -85,7 +85,7 @@ export async function authVerify(certJson: unknown): Promise<AuthVerifyResponse>
 
 export async function getIdentity(
 	sn: string
-): Promise<{ sn: string; pk: string; tbs_cert: string; display_name: string | null; registered_at: number }> {
+): Promise<{ sn: string; pk: string; display_name: string | null; registered_at: number }> {
 	return request('GET', `/identity/${sn}`);
 }
 

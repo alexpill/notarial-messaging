@@ -1,11 +1,18 @@
+-- LocalPKI EN registry. Paper §2: notaries store the signed hash of the
+-- certificate and its serial number — we extend this with `pk` (needed to
+-- verify message signatures), `subject_id` (display label, kept out of the
+-- cryptographic core), and `tbs_der` (the exact bytes that were signed at
+-- enrollment time, so SI verification is robust to x509-cert version drift —
+-- the encoding is frozen at enrollment, never recomputed).
 CREATE TABLE identities (
-    sn          TEXT    NOT NULL PRIMARY KEY,
-    si          TEXT    NOT NULL,
-    pk          TEXT    NOT NULL,
-    tbs_cert    TEXT    NOT NULL,
-    lra_id      TEXT    NOT NULL,
+    sn            TEXT   NOT NULL PRIMARY KEY,
+    si            TEXT   NOT NULL,
+    pk            TEXT   NOT NULL,
+    tbs_der       TEXT   NOT NULL,
+    subject_id    TEXT   NOT NULL,
+    lra_id        TEXT   NOT NULL,
     registered_at BIGINT NOT NULL,
-    revoked_at  BIGINT
+    revoked_at    BIGINT
 );
 
 CREATE TABLE actes (
