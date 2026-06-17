@@ -96,7 +96,7 @@ pub fn verify_message_signature(
         .map_err(|_| CryptoError::InvalidMessageSignature)
 }
 
-/// AAD: acte_uuid (16) || timestamp (8, LE) || SN (16) — binds ciphertext to its context.
+/// AAD (Additional Authenticated Data): acte_uuid (16) || timestamp (8, LE) || SN (16) — binds ciphertext to its context.
 fn build_aad(acte_uuid: &uuid::Uuid, timestamp: i64, sn: &SerialNumber) -> Vec<u8> {
     let mut aad = Vec::with_capacity(40);
     aad.extend_from_slice(acte_uuid.as_bytes());

@@ -26,11 +26,11 @@ pub fn derive_k_acte(k_master: &[u8; 32], acte_uuid: &uuid::Uuid) -> [u8; 32] {
     info.extend_from_slice(b"notariat-msg-v1");
     info.extend_from_slice(acte_uuid.as_bytes());
 
-    let mut okm = [0u8; 32];
+    let mut output_key_material = [0u8; 32];
     Hkdf::<Sha256>::new(None, k_master)
-        .expand(&info, &mut okm)
+        .expand(&info, &mut output_key_material)
         .expect("32 bytes is always a valid HKDF output length");
-    okm
+    output_key_material
 }
 
 /// K_send = HKDF-Expand(K_acte, "send" || SN, 32).
@@ -40,11 +40,11 @@ pub fn derive_k_send(k_acte: &[u8; 32], sn: &SerialNumber) -> [u8; 32] {
     info.extend_from_slice(b"send");
     info.extend_from_slice(&sn.0);
 
-    let mut okm = [0u8; 32];
+    let mut output_key_material = [0u8; 32];
     Hkdf::<Sha256>::new(None, k_acte)
-        .expand(&info, &mut okm)
+        .expand(&info, &mut output_key_material)
         .expect("32 bytes is always a valid HKDF output length");
-    okm
+    output_key_material
 }
 
 pub fn ecies_encrypt(

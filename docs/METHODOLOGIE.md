@@ -13,3 +13,32 @@ Ayant déjà travaillé dans un projet personnel sur une messagerie et pensant d
 Une première étape dans la réaliser de ce test technique à été de lire le papier de recherche *LocalPKI* (ie: `./docs/LocalPKI.pdf`) pour avoir un début de vision de la solution proposée par Trust4Sig. Suite à la lecture de ce document je me suis aidé de *NotebookLLM*, un outil de google, pour chercher des sources associés au papier de recherche et ainsi pouvoir les centraliser et les interroger pour commencer à anticiper une solution pour le sujet de messagerie.
 
 Après des recherches sur les différents protocols, il s'est avéré que le protocol de communication que je pensais être une bonne solution à savoir le protocol Signal n'est pas applicable dans le cas du notariat, ou tout du moins dans l'idée que je me fais du notariat. En effet le protocol Signal garantie la confidentialité mais ne mets pas en place un systeme de stockage des messages, ces derniers étant seulement sur les appareils des personnes échangeant les messages. Ainsi il n'est pas possible, par exemple lors d'un éventuel litige, de pouvoir être certain d'accéder aux messages.
+
+- exploration des autres solutions
+
+- exploration d'une architecture
+
+- mise en place d'un architecture
+
+- mise en place d'un skelette de code
+
+- c'reation des fonction de localpji-core avec l'ia comme conseiller
+
+- supervisation de l'ia dans l'implementation des autres taches
+
+## Concernant la décision technique
+
+
+## Résultat et limites
+
+- on a pk dans l'en
+- si on invalide la personne comme on appel en qu'a la connexion pour le moment on a pas de revocation mid-conversation
+- tous les particpants peuvent retrouver k_send_alice mais seulement alice peut signer avec sa clé privée ed25519 et prouvé que c'set bien elle
+  - l'avantage c'est que on peut toujours lire les message via notaire genre cas juridique
+- on a plus de chose dans l'enregistrement en (seulement coté en pas dans la communication) pour notamment permettre d'auditer (alice a été revoquée le 13 juin) c'est une déviation par rapport  au papier  
+- dans localpki-core on considère dans authentication que c'est le serveur qui check alros que normalement on devrait faire en sorte que alice puisse checker bob et vice versa. On fait ça parce que l'on est dans le ccas d'une messagerie mais du cuop ça couple fortement localpki-core a notre systeme de messagerie. on pourrait faire la vérification mais il faudrait dans tous les cas aussi le faire sur le serveur aprce qu ón peut pas faire confiancce a alice qui dirant "si si tqt j'ai vérifié bob" 
+- pour le moment aps de cross-certification accross différente EN donc si bob est sur le meme EN qu'alice pour le moment on fait pas
+- on a deux fois la meme définition des foncion messaging une fois dans la crate messaging-crypto et l'autre dans le frontend et c'est normal parce qu'il faut bien que le forntend puisse faire tout ce qui est derive_k_send et aussi ecies pour les messages
+- pour des raisons de simplification notre serveur fait a la fois EN et LRA puisque c'est pas tant le sujet du projet 
+- pour le moment pas de vrai gestion de role on part du principe que le notaire d'un acte c'est jsute celui qui a crée un acte et donc il est enregistrer en base dans acte.notaire_sn 
+- juste une auth par session token
