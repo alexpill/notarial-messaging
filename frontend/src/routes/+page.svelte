@@ -29,6 +29,7 @@
 	let enrollDone = $state(false);
 	let steps = $state<StepState[]>(STEP_LABELS.map(() => 'pending'));
 	let enrollError = $state('');
+	let snCopied = $state(false);
 
 	onMount(() => {
 		identityStore.init();
@@ -100,6 +101,13 @@
 		enrollingRole = null;
 		enrollDone = false;
 		if (role === 'notaire') goto('/notaire/actes');
+	}
+
+	async function copySn() {
+		if (!identity) return;
+		await navigator.clipboard.writeText(identity.sn_hex);
+		snCopied = true;
+		setTimeout(() => (snCopied = false), 2000);
 	}
 
 	function logout() {
@@ -175,11 +183,31 @@
 		<!-- ── État connecté ────────────────────────────────────────────────── -->
 		<div class="text-center space-y-1">
 			<p class="font-medium">{identity.name}</p>
-			<p class="text-xs text-muted-foreground font-mono">SN : {identity.sn_hex}</p>
+			<button
+			onclick={copySn}
+			title="Copier le SN"
+			class="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors
+				{snCopied
+				? 'border-green-400 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-400'
+				: 'border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground'}"
+		>
+			<span class="font-mono">SN : {identity.sn_hex}</span>
+			{#if snCopied}
+				<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+				</svg>
+			{:else}
+				<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+					<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+				</svg>
+			{/if}
+		</button>
 			<Badge variant="outline" class="text-xs capitalize">{identity.role ?? 'utilisateur'}</Badge>
 		</div>
 
-		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-xl">
+		<div class="grid grid-cols-1 gap-4 w-full max-w-xl
+			{identity.role ? 'sm:max-w-xs sm:mx-auto' : 'sm:grid-cols-2'}">
 			{#if !identity.role || identity.role === 'notaire'}
 				<Card.Root class="hover:shadow-md transition-shadow">
 					<Card.Header>
