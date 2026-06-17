@@ -277,9 +277,10 @@
 		<div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-xs text-amber-800 dark:text-amber-300 max-w-xl w-full space-y-1">
 			<p class="font-semibold">PoC — simplifications intentionnelles</p>
 			<ul class="list-disc list-inside space-y-0.5 text-amber-700 dark:text-amber-400">
-				<li>En production, un notaire vérifierait votre identité physique avant l'enrôlement.</li>
-				<li>Les rôles sont locaux (sessionStorage) — le serveur ne distingue pas notaire et client.</li>
-				<li>Les clés sont effacées à la fermeture de l'onglet.</li>
+				<li>Le self-enroll ci-dessus est un <strong>raccourci démo</strong> : l'identité est auto-déclarée, sans vérification.</li>
+				<li>Flux réel : un notaire <strong>endosse</strong> la demande d'un client (Espace notaire → « Enrôler un client ») ; l'EN n'enregistre l'identité qu'avec cette caution signée.</li>
+				<li>Le serveur ne distingue pas encore « notaire » de « client » : en production, le rôle notaire serait une habilitation provisionnée côté EN (registre des identités).</li>
+				<li>Identité non persistante : les clés vivent en sessionStorage et sont effacées à la fermeture de l'onglet.</li>
 			</ul>
 		</div>
 	{/if}

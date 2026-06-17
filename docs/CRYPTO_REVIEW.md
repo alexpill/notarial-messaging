@@ -146,10 +146,24 @@ les docs décrivent le modèle *notaire-endosse*, qui n'est **pas** ce que fait
 `/enroll/self` derrière un flag de build), pour qu'un correcteur voie le modèle de
 confiance *fonctionner*, pas être simulé.
 
-> **MàJ 2026-06-17** : `ARCHITECTURE.md §10.1` décrit désormais honnêtement les
-> deux chemins (self-enroll par défaut vs endossé). Le **comportement**
-> (self-enroll par défaut) reste le finding ouvert ; seul l'écart doc↔réalité est
-> corrigé.
+> **MàJ 2026-06-17** : l'écart doc↔réalité est corrigé (les deux chemins sont
+> décrits honnêtement en `ARCHITECTURE.md §10.1`, et le frontend affiche un badge
+> qui qualifie le self-enroll de « raccourci démo » et pointe le flux endossé).
+> Le **comportement** reste le finding ouvert, par décision de proportionnalité :
+> imposer l'endossement exigerait d'ancrer le **rôle notaire**, et le faire dans le
+> navigateur entraînerait un système d'habilitation + la persistance d'identité —
+> hors budget d'un PoC, et au prix de l'expérience « un clic » attendue par un
+> relecteur.
+>
+> **Le seam (où ça se branche, sans sur-ingénierie)** : le rôle ne peut pas vivre
+> dans le TBSCert (auto-signé → auto-déclaré). Sa place est **côté EN** : un
+> attribut `role` sur le SN dans le registre des identités, posé par un processus
+> de confiance (seed au démarrage ou commande opérateur — *pas* un système d'admin
+> web). La mise en application se réduit alors à **une vérification** dans
+> `POST /enroll` : n'accepter un endossement que si `lra_sn.role == notaire`, d'où
+> la chaîne **Root LRA → notaire → client**. La hiérarchie est déjà démontrable
+> sans persistance navigateur via le `demo-cli` (identités sur disque) ; le web
+> garde le self-enroll étiqueté « démo ».
 
 ---
 
