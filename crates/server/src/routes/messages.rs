@@ -14,7 +14,7 @@ use diesel::prelude::*;
 use localpki_core::cert::SerialNumber;
 use ed25519_dalek::Signer;
 use messaging_crypto::{
-    merkle::{MerkleLog, leaf_hash},
+    merkle::{MerkleLog, leaf_hash, signed_root_payload},
     messages::verify_message_signature,
 };
 use serde::{Deserialize, Serialize};
@@ -63,6 +63,19 @@ pub async fn send_message(
     let acte_uuid = uuid::Uuid::parse_str(&acte_id)
         .map_err(|_| AppError::BadRequest("invalid acte UUID".into()))?;
 
+    // Bound clock drift on the client-supplied timestamp. Without this, a
+    // malicious client could antedate/postdate its own signed messages within
+    // arbitrary windows (the signature/AAD would still verify). 5 minutes is
+    // generous enough to tolerate normal NTP drift while keeping the audit
+    // window narrow.
+    const MAX_TIMESTAMP_DRIFT_SECS: i64 = 300;
+    let server_now = crate::utils::unix_now()?;
+    if (req.timestamp - server_now).abs() > MAX_TIMESTAMP_DRIFT_SECS {
+        return Err(AppError::BadRequest(format!(
+            "timestamp drift > {MAX_TIMESTAMP_DRIFT_SECS}s vs server clock"
+        )));
+    }
+
     let sig_bytes: [u8; 64] = crate::utils::decode_b64(&req.signature, "signature")?;
     let signature = ed25519_dalek::Signature::from_bytes(&sig_bytes);
     let nonce_bytes: [u8; 12] = crate::utils::decode_b64(&req.nonce, "nonce")?;
@@ -101,7 +114,7 @@ pub async fn send_message(
     )?;
 
     let msg_id = uuid::Uuid::new_v4().to_string();
-    let now = crate::utils::unix_now()?;
+    let now = server_now;
 
     // Clone the EN signing key out of the mutex so the DB closure can sign without
     // holding the global lock across the transaction.
@@ -175,7 +188,10 @@ pub async fn send_message(
             let root = log.root().ok_or_else(|| {
                 diesel::result::Error::DeserializationError("empty merkle log after append".into())
             })?;
-            let en_sig = en_sk.sign(&root);
+            // Sign tag || root || logged_at (le) so the EN signature binds both
+            // the tree state and the moment it was attested. Matches
+            // ARCHITECTURE.md §6.1 (signed_root = Sign(sk_EN, root || timestamp || "log-v1")).
+            let en_sig = en_sk.sign(&signed_root_payload(&root, now));
 
             // sent_at stores the client-supplied timestamp so decryption AAD is
             // consistent. The Merkle leaf uses server `now` separately for ordering integrity.
@@ -296,14 +312,14 @@ pub async fn get_merkle_root(
         merkle_log
             .filter(acte_uuid.eq(&acte_id))
             .order(id.asc())
-            .select((leaf_hash, parent_hash, en_signature))
-            .load::<(String, Option<String>, Option<String>)>(conn)
+            .select((leaf_hash, parent_hash, en_signature, logged_at))
+            .load::<(String, Option<String>, Option<String>, i64)>(conn)
     })
     .await?;
 
     let leaves: Vec<[u8; 32]> = rows
         .iter()
-        .map(|(h, _, _)| -> Result<[u8; 32], AppError> {
+        .map(|(h, _, _, _)| -> Result<[u8; 32], AppError> {
             hex::decode(h)
                 .map_err(|_| AppError::Database("malformed leaf hash in merkle_log".into()))?
                 .try_into()
@@ -316,15 +332,19 @@ pub async fn get_merkle_root(
         .root()
         .map(|r| hex::encode(r));
 
-    // The EN signature on the most recent row attests to the current root.
-    // Older rows keep their own (root, signature) pair so any historical state is auditable.
-    let latest_en_signature = rows.last().and_then(|(_, _, sig)| sig.clone());
-    let latest_signed_root = rows.last().and_then(|(_, root_hex, _)| root_hex.clone());
+    // The EN signature on the most recent row attests to the current root at
+    // its logged_at timestamp. Older rows keep their own (root, signature, ts)
+    // tuple so any historical state is auditable end-to-end.
+    let latest = rows.last();
+    let latest_en_signature = latest.and_then(|(_, _, sig, _)| sig.clone());
+    let latest_signed_root = latest.and_then(|(_, root_hex, _, _)| root_hex.clone());
+    let latest_logged_at = latest.map(|(_, _, _, ts)| *ts);
 
     Ok(Json(serde_json::json!({
         "root": root,
         "leaves_count": count,
         "en_signature": latest_en_signature,
         "signed_root": latest_signed_root,
+        "signed_at": latest_logged_at,
     })))
 }

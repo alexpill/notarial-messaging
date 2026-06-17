@@ -84,13 +84,18 @@ pub fn verify_auth_response(
     Ok(response.status.clone())
 }
 
-/// Canonical payload signed by the EN: status (1) || SN (16) || SI (64) || nonce (32).
+/// Domain-separation tag for EN AuthResponse signatures. Distinguishes this
+/// payload from anything else the EN key signs (e.g. Merkle roots).
+const AUTH_DOMAIN_TAG: &[u8] = b"localpki-auth-v1\0";
+
+/// Canonical payload signed by the EN: tag || status (1) || SN (16) || SI (64) || nonce (32).
 fn auth_payload(status: &AuthStatus, request: &AuthRequest) -> Vec<u8> {
     let status_byte: u8 = match status {
         AuthStatus::Ok => 0,
         AuthStatus::Unknown => 1,
     };
-    let mut payload = Vec::with_capacity(113);
+    let mut payload = Vec::with_capacity(AUTH_DOMAIN_TAG.len() + 113);
+    payload.extend_from_slice(AUTH_DOMAIN_TAG);
     payload.push(status_byte);
     payload.extend_from_slice(&request.serial_number.0);
     payload.extend_from_slice(&request.signature_id.0.to_bytes());

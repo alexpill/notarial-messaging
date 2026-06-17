@@ -203,6 +203,7 @@ export async function getMerkleRoot(
 	leaves_count: number;
 	en_signature: string | null;
 	signed_root: string | null;
+	signed_at: number | null;
 }> {
 	return request('GET', `/actes/${acteId}/merkle`, undefined, token);
 }

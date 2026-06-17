@@ -10,6 +10,7 @@
 
 use aes_gcm::{aead::{Aead, KeyInit, Payload}, Aes256Gcm};
 use ed25519_dalek::{ed25519::signature::Signer, Verifier};
+use rand::{RngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 
 use crate::{error::CryptoError, keys::derive_k_send};
@@ -36,7 +37,8 @@ pub fn encrypt_message(
 ) -> Result<(Vec<u8>, [u8; 12]), CryptoError> {
     let k_send = derive_k_send(k_acte, sender_sn);
     let aad = build_aad(acte_uuid, timestamp, sender_sn);
-    let nonce_bytes: [u8; 12] = rand::random();
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
 
     let ciphertext = Aes256Gcm::new_from_slice(&k_send)
         .map_err(|_| CryptoError::KeyDerivation)?

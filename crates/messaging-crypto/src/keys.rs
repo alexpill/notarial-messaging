@@ -3,6 +3,7 @@
 
 use aes_gcm::{aead::{Aead, KeyInit}, Aes256Gcm};
 use hkdf::Hkdf;
+use rand::{RngCore, rngs::OsRng};
 use sha2::Sha256;
 
 use crate::error::CryptoError;
@@ -60,7 +61,8 @@ pub fn ecies_encrypt(
         .expand(b"notariat-ecies-v1", symmetric_key.as_mut())
         .map_err(|_| CryptoError::KeyDerivation)?;
 
-    let nonce_bytes: [u8; 12] = rand::random();
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
     let ciphertext = Aes256Gcm::new_from_slice(symmetric_key.as_ref())
         .map_err(|_| CryptoError::KeyDerivation)?
         .encrypt(aes_gcm::Nonce::from_slice(&nonce_bytes), plaintext)

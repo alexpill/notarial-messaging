@@ -144,6 +144,8 @@ pub struct MerkleEntry {
     pub acte_uuid: String,
     pub message_id: String,
     pub leaf_hash: String,
+    /// Merkle root *after* inserting this leaf (hex 32 bytes). The column name
+    /// is historical — see ARCHITECTURE.md §11.
     pub parent_hash: Option<String>,
     pub en_signature: Option<String>,
     pub logged_at: i64,
@@ -155,6 +157,7 @@ pub struct NewMerkleEntry<'a> {
     pub acte_uuid: &'a str,
     pub message_id: &'a str,
     pub leaf_hash: &'a str,
+    /// Stores the Merkle root post-append, not a parent leaf. See MerkleEntry.
     pub parent_hash: Option<&'a str>,
     pub en_signature: Option<&'a str>,
     pub logged_at: i64,

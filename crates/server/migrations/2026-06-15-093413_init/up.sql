@@ -52,6 +52,10 @@ CREATE TABLE merkle_log (
     acte_uuid   TEXT    NOT NULL REFERENCES actes(uuid),
     message_id  TEXT    NOT NULL REFERENCES messages(id),
     leaf_hash   TEXT    NOT NULL,
+    -- `parent_hash` historically suggested the previous leaf hash, but in fact
+    -- it stores the Merkle root *after* inserting this leaf (hex 32 bytes).
+    -- The column name is kept to avoid a migration; semantics are documented
+    -- in ARCHITECTURE.md §11.
     parent_hash TEXT,
     en_signature TEXT,
     logged_at   BIGINT  NOT NULL

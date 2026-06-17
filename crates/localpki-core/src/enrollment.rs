@@ -114,7 +114,8 @@ pub fn prepare_lra_to_en_message(
 
     let cipher =
         Aes256Gcm::new_from_slice(&symetric_key).map_err(|_| LocalPkiError::KeyGeneration)?;
-    let nonce_bytes: [u8; 12] = rand::random();
+    let mut nonce_bytes = [0u8; 12];
+    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut nonce_bytes);
     let nonce = aes_gcm::Nonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(nonce, plaintext.as_ref())

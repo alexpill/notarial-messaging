@@ -406,10 +406,11 @@ leaf_i = SHA-256(SIG_i || acte_uuid || timestamp_i || seq_i)
 
 Où `seq_i` est le numéro de séquence monotone du message dans l'acte.
 
-La racine de l'arbre `root_n` est signée périodiquement par l'EN :
+La racine de l'arbre `root_n` est signée **à chaque append** par l'EN, avec une étiquette de domaine pour éviter toute confusion avec d'autres usages de `sk_EN` (ex : `AuthResponse`) :
 ```
-signed_root = Sign(sk_EN, root_n || timestamp || "log-v1")
+signed_root = Sign(sk_EN, "localpki-merkle-v1\0" || root_n || timestamp_le)
 ```
+où `timestamp` est l'horloge serveur au moment de l'append (`logged_at`), exposée par `GET /actes/:id/merkle` pour permettre la vérification externe.
 
 ### 6.2 Propriétés garanties
 
@@ -712,7 +713,7 @@ merkle_log (
   acte_uuid    TEXT REFERENCES actes(uuid),
   message_id   TEXT REFERENCES messages(id),
   leaf_hash    TEXT NOT NULL,      -- SHA256(signature || acte_uuid || timestamp || seq)
-  parent_hash  TEXT,               -- Hash de la feuille précédente (NULL pour la première)
+  parent_hash  TEXT,               -- Racine du Merkle log après insertion de cette feuille (hex 32 bytes). NULL si l'append a échoué après l'INSERT (jamais en pratique).
   en_signature TEXT,               -- Sign(sk_EN, root || timestamp) — mis à jour par lot
   logged_at    BIGINT NOT NULL     -- Unix timestamp
 )

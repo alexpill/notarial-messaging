@@ -19,6 +19,21 @@ use serde::{Deserialize, Serialize};
 const LEAF_PREFIX: u8 = 0x00;
 const INNER_PREFIX: u8 = 0x01;
 
+/// Domain-separation tag for EN signatures on the Merkle root. Keeps the EN
+/// signing key from producing signatures that could be reused in another
+/// protocol context (e.g. AuthResponse).
+pub const SIGNED_ROOT_DOMAIN_TAG: &[u8] = b"localpki-merkle-v1\0";
+
+/// Canonical payload signed by the EN over a Merkle root snapshot.
+/// Format: tag || root (32) || timestamp_le (8). See ARCHITECTURE.md §6.1.
+pub fn signed_root_payload(root: &[u8; 32], timestamp: i64) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(SIGNED_ROOT_DOMAIN_TAG.len() + 32 + 8);
+    payload.extend_from_slice(SIGNED_ROOT_DOMAIN_TAG);
+    payload.extend_from_slice(root);
+    payload.extend_from_slice(&timestamp.to_le_bytes());
+    payload
+}
+
 /// Inclusion proof for a single leaf, following RFC 6962 audit path semantics.
 /// `siblings` lists the audit path hashes from leaf level up to the root;
 /// `leaf_index` and `tree_size` are required for the verifier to know on which

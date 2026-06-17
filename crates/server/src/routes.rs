@@ -3,6 +3,7 @@ pub mod authentication;
 pub mod enrollment;
 pub mod messages;
 pub mod participants;
+pub mod revocation;
 pub mod ws;
 
 use crate::state::AppState;
@@ -25,6 +26,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/enroll/prepare", post(enrollment::prepare_tbs))
         .route("/enroll/self", post(enrollment::enroll_self))
         .route("/auth/verify", post(authentication::verify))
+        .route("/revoke", post(revocation::revoke))
         .route("/identity/:sn", get(enrollment::get_identity))
         // Actes
         .route("/actes", get(actes::list_actes).post(actes::create_acte))
