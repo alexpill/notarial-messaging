@@ -169,6 +169,10 @@ cargo run -p demo-cli -- enroller \
 
 ## Interface web
 
+> 📸 **Tutoriel pas-à-pas en captures :** [`docs/DEMO.md`](docs/DEMO.md) — enrôler
+> un notaire, des clients (mode démo *et* flux endossé), créer un acte, ajouter
+> des participants (avec / sans historique).
+
 L'interface SvelteKit distingue deux rôles :
 
 **Notaire** (`/notaire/`)
