@@ -9,7 +9,7 @@ use crate::error::LocalPkiError;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Copy)]
 pub struct SerialNumber(pub [u8; 16]);
 
-/// SI = Ed25519.Sign(sk_user, SHA256(TBSCert_DER))
+/// SI = Ed25519.Sign(sk_user, TBSCert_DER) — Ed25519 hache en interne, pas de SHA-256 explicite.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignatureId(pub ed25519_dalek::Signature);
 

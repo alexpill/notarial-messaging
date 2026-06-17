@@ -22,6 +22,9 @@ struct TestApp {
     router: Router,
     root_lra_sn: String,
     root_lra_sk: ed25519_dalek::SigningKey,
+    /// SN(hex) → signing key, populated by `enroll_user`, so `authenticate` can
+    /// sign the login challenge (proof of possession) without changing call sites.
+    keys: std::sync::Mutex<std::collections::HashMap<String, ed25519_dalek::SigningKey>>,
 }
 
 impl TestApp {
@@ -38,6 +41,7 @@ impl TestApp {
             router: crate::routes::build_router(state),
             root_lra_sn,
             root_lra_sk,
+            keys: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -120,14 +124,39 @@ impl TestApp {
         assert_eq!(status, StatusCode::CREATED, "enroll failed: {resp}");
 
         let sn_hex = hex::encode(sn_bytes);
+        self.keys
+            .lock()
+            .unwrap()
+            .insert(sn_hex.clone(), kp.signing_key.clone());
         (kp, sn_hex, cert)
     }
 
     /// Authenticates via `POST /auth/verify`. Returns the session token.
     async fn authenticate(&self, cert: &LocalPKICert) -> String {
+        use ed25519_dalek::ed25519::signature::Signer;
         let cert_json = serde_json::to_value(cert).unwrap();
+
+        // Fetch a fresh challenge and sign it with the cert's sk (proof of possession).
+        let (_, ch) = self.post_json("/auth/challenge", &json!({})).await;
+        let challenge = ch["challenge"].as_str().unwrap().to_string();
+        let nonce: [u8; 32] = URL_SAFE_NO_PAD.decode(&challenge).unwrap().try_into().unwrap();
+        let sn_hex = hex::encode(cert.tbs.serial_number.0);
+        let sk = self
+            .keys
+            .lock()
+            .unwrap()
+            .get(&sn_hex)
+            .cloned()
+            .expect("signing key for cert not in test keystore");
+        let payload =
+            localpki_core::authentication::auth_pop_payload(&cert.tbs.serial_number, &nonce);
+        let pop_signature = URL_SAFE_NO_PAD.encode(sk.sign(&payload).to_bytes());
+
         let (status, resp) = self
-            .post_json("/auth/verify", &json!({ "cert": cert_json }))
+            .post_json(
+                "/auth/verify",
+                &json!({ "cert": cert_json, "challenge": challenge, "pop_signature": pop_signature }),
+            )
             .await;
         assert_eq!(status, StatusCode::OK, "auth failed: {resp}");
         assert!(resp["authenticated"].as_bool().unwrap_or(false));
@@ -265,9 +294,52 @@ async fn test_auth_unknown_identity_fails() {
     let cert = create_self_signed_cert(&kp, "Ghost", &challenge).unwrap();
     let cert_json = serde_json::to_value(&cert).unwrap();
 
-    let (status, resp) = app.post_json("/auth/verify", &json!({ "cert": cert_json })).await;
+    // Provide a well-formed challenge + PoP so the request deserializes; the
+    // identity is still unknown to the EN, so the lookup fails with 404.
+    use ed25519_dalek::ed25519::signature::Signer;
+    let (_, ch) = app.post_json("/auth/challenge", &json!({})).await;
+    let ch_str = ch["challenge"].as_str().unwrap().to_string();
+    let nonce: [u8; 32] = URL_SAFE_NO_PAD.decode(&ch_str).unwrap().try_into().unwrap();
+    let payload =
+        localpki_core::authentication::auth_pop_payload(&cert.tbs.serial_number, &nonce);
+    let pop_signature = URL_SAFE_NO_PAD.encode(kp.signing_key.sign(&payload).to_bytes());
+
+    let (status, resp) = app
+        .post_json(
+            "/auth/verify",
+            &json!({ "cert": cert_json, "challenge": ch_str, "pop_signature": pop_signature }),
+        )
+        .await;
     // Identity not in EN → 404
     assert_eq!(status, StatusCode::NOT_FOUND, "expected 404, got {status}: {resp}");
+}
+
+#[tokio::test]
+async fn test_auth_challenge_is_single_use() {
+    use ed25519_dalek::ed25519::signature::Signer;
+    let app = TestApp::new().await;
+    let (kp, _sn, cert) = app.enroll_user("Bob").await;
+    let cert_json = serde_json::to_value(&cert).unwrap();
+
+    let (_, ch) = app.post_json("/auth/challenge", &json!({})).await;
+    let challenge = ch["challenge"].as_str().unwrap().to_string();
+    let nonce: [u8; 32] = URL_SAFE_NO_PAD.decode(&challenge).unwrap().try_into().unwrap();
+    let payload =
+        localpki_core::authentication::auth_pop_payload(&cert.tbs.serial_number, &nonce);
+    let pop_signature = URL_SAFE_NO_PAD.encode(kp.signing_key.sign(&payload).to_bytes());
+    let body = json!({ "cert": cert_json, "challenge": challenge, "pop_signature": pop_signature });
+
+    // First use succeeds.
+    let (status1, _) = app.post_json("/auth/verify", &body).await;
+    assert_eq!(status1, StatusCode::OK);
+
+    // Replaying the exact same challenge + signature fails — it was consumed.
+    let (status2, _) = app.post_json("/auth/verify", &body).await;
+    assert_eq!(
+        status2,
+        StatusCode::UNAUTHORIZED,
+        "replayed login challenge must be rejected (A1)"
+    );
 }
 
 // ─── Tests — actes ───────────────────────────────────────────────────────────

@@ -3,21 +3,62 @@ use axum::{Json, extract::State};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::Verifier;
 use localpki_core::{
-    authentication::{AuthStatus, build_auth_request, verify_auth_response},
+    authentication::{AuthStatus, auth_pop_payload, build_auth_request, verify_auth_response},
     cert::LocalPKICert,
 };
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+const AUTH_CHALLENGE_TTL_SECS: i64 = 60;
 
 #[derive(Debug, Deserialize)]
 pub struct AuthVerifyRequest {
     pub cert: serde_json::Value,
+    /// Opaque login challenge previously obtained from POST /auth/challenge. base64url.
+    pub challenge: String,
+    /// Ed25519(sk, "localpki-auth-pop-v1\0" || SN || challenge_nonce). base64url.
+    /// Proves possession of sk — the static SI alone is no longer sufficient.
+    pub pop_signature: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct AuthVerifyResponse {
     pub authenticated: bool,
     pub session_token: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChallengeResponse {
+    pub challenge: String,
+    pub expires_at: i64,
+}
+
+/// Issues a fresh single-use login challenge. The client signs
+/// `tag || SN || nonce` with sk and presents it to POST /auth/verify, proving
+/// possession of the private key (not merely knowledge of the static SI).
+/// In-memory, single-process store — same model as the WS ticket flow.
+pub async fn challenge(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ChallengeResponse>, AppError> {
+    let now = crate::utils::unix_now()?;
+    let expires_at = now + AUTH_CHALLENGE_TTL_SECS;
+
+    let mut raw = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut raw);
+    let challenge = URL_SAFE_NO_PAD.encode(raw);
+
+    {
+        let mut challenges = state
+            .auth_challenges
+            .lock()
+            .map_err(|_| AppError::Database("auth_challenges lock poisoned".into()))?;
+        // Opportunistic GC — drop expired challenges so the map can't grow forever.
+        challenges.retain(|_, exp| *exp >= now);
+        challenges.insert(challenge.clone(), expires_at);
+    }
+
+    Ok(Json(ChallengeResponse { challenge, expires_at }))
 }
 
 pub async fn verify(
@@ -57,6 +98,30 @@ pub async fn verify(
         return Err(AppError::BadRequest(
             "presented public key does not match registry".into(),
         ));
+    }
+
+    // Proof of possession: the client must sign a fresh, single-use server
+    // challenge with sk. This is what makes the login non-replayable — the static
+    // SI (a public value) is no longer a sufficient credential. Verified against
+    // the registry pk (stored_pk), the same key the EN vouches for.
+    {
+        let now = crate::utils::unix_now()?;
+        let expires_at = {
+            let mut challenges = state
+                .auth_challenges
+                .lock()
+                .map_err(|_| AppError::Database("auth_challenges lock poisoned".into()))?;
+            challenges.remove(&req.challenge).ok_or(AppError::Unauthorized)?
+        };
+        if expires_at < now {
+            return Err(AppError::Unauthorized);
+        }
+        let nonce: [u8; 32] = crate::utils::decode_b64(&req.challenge, "challenge")?;
+        let pop_sig_bytes: [u8; 64] = crate::utils::decode_b64(&req.pop_signature, "pop_signature")?;
+        let pop_sig = ed25519_dalek::Signature::from_bytes(&pop_sig_bytes);
+        stored_pk
+            .verify(&auth_pop_payload(&cert.tbs.serial_number, &nonce), &pop_sig)
+            .map_err(|_| AppError::Unauthorized)?;
     }
 
     // Reject expired or not-yet-valid certs at auth time — matches LocalPKI

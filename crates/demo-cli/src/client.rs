@@ -44,9 +44,48 @@ impl ApiClient {
             .ok_or_else(|| anyhow::anyhow!("enroll: missing serial_number in response"))
     }
 
-    /// POST /auth/verify — retourne le session token.
-    pub async fn authenticate(&self, cert: &LocalPKICert) -> anyhow::Result<String> {
-        let body = json!({ "cert": serde_json::to_value(cert)? });
+    /// POST /auth/challenge — retourne un nonce single-use à signer (preuve de possession).
+    async fn auth_challenge(&self) -> anyhow::Result<String> {
+        let resp = self
+            .client
+            .post(format!("{}/auth/challenge", self.base_url))
+            .json(&json!({}))
+            .send()
+            .await
+            .context("POST /auth/challenge")?;
+        let resp = ensure_ok(resp, "POST /auth/challenge").await?;
+        let v: Value = resp.json().await?;
+        v["challenge"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow::anyhow!("auth_challenge: missing challenge"))
+    }
+
+    /// POST /auth/verify avec preuve de possession — retourne le session token.
+    /// Le client signe `tag || SN || nonce` avec sk pour prouver qu'il détient la clé.
+    pub async fn authenticate(
+        &self,
+        signing_key: &ed25519_dalek::SigningKey,
+        cert: &LocalPKICert,
+    ) -> anyhow::Result<String> {
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+        use ed25519_dalek::ed25519::signature::Signer;
+
+        let challenge = self.auth_challenge().await?;
+        let nonce: [u8; 32] = URL_SAFE_NO_PAD
+            .decode(&challenge)
+            .ok()
+            .and_then(|b| b.try_into().ok())
+            .ok_or_else(|| anyhow::anyhow!("auth challenge: expected 32 bytes"))?;
+        let payload =
+            localpki_core::authentication::auth_pop_payload(&cert.tbs.serial_number, &nonce);
+        let pop_signature = URL_SAFE_NO_PAD.encode(signing_key.sign(&payload).to_bytes());
+
+        let body = json!({
+            "cert": serde_json::to_value(cert)?,
+            "challenge": challenge,
+            "pop_signature": pop_signature,
+        });
         let resp = self
             .client
             .post(format!("{}/auth/verify", self.base_url))

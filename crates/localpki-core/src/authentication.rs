@@ -102,3 +102,50 @@ fn auth_payload(status: &AuthStatus, request: &AuthRequest) -> Vec<u8> {
     payload.extend_from_slice(&request.nonce);
     payload
 }
+
+// ─── Login proof of possession ─────────────────────────────────────────────────
+//
+// At login the client must prove it holds sk (not merely that it knows the static,
+// non-secret SI). The server issues a fresh single-use nonce; the client signs
+// `tag || SN || nonce` with sk; the server verifies with the registry pk. Signed
+// directly with Ed25519 (internal SHA-512), no explicit SHA-256 — same convention
+// as SI over the cert DER.
+
+/// Domain-separation tag for the client's login proof-of-possession signature.
+/// Keeps the user key from producing a login signature reusable in another context.
+pub const AUTH_POP_DOMAIN_TAG: &[u8] = b"localpki-auth-pop-v1\0";
+
+/// Canonical payload the client signs at login: tag || SN (16) || challenge nonce (32).
+pub fn auth_pop_payload(sn: &crate::cert::SerialNumber, nonce: &[u8; 32]) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(AUTH_POP_DOMAIN_TAG.len() + 16 + 32);
+    payload.extend_from_slice(AUTH_POP_DOMAIN_TAG);
+    payload.extend_from_slice(&sn.0);
+    payload.extend_from_slice(nonce);
+    payload
+}
+
+#[cfg(test)]
+mod pop_tests {
+    use super::*;
+    use crate::{cert::SerialNumber, crypto::KeyPair};
+
+    #[test]
+    fn auth_pop_roundtrip_and_rejects_wrong_nonce() {
+        let kp = KeyPair::generate().unwrap();
+        let sn = SerialNumber([7u8; 16]);
+        let nonce = [9u8; 32];
+
+        let sig = kp.signing_key.sign(&auth_pop_payload(&sn, &nonce));
+        assert!(kp
+            .verifying_key
+            .verify(&auth_pop_payload(&sn, &nonce), &sig)
+            .is_ok());
+
+        // A different nonce must not verify against the same signature.
+        let other_nonce = [10u8; 32];
+        assert!(kp
+            .verifying_key
+            .verify(&auth_pop_payload(&sn, &other_nonce), &sig)
+            .is_err());
+    }
+}

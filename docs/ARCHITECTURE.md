@@ -118,10 +118,16 @@ EN vérifie la signature LRA, ajoute (SN_Alice, SI_Alice) à sa base.
 Lors de la connexion d'Alice au serveur de messagerie, le serveur vérifie son certificat LocalPKI auprès de l'EN :
 
 ```
-Alice → Serveur : Cert_Alice
+Alice → Serveur : demande de challenge
+Serveur → Alice : nonce_PoP        (32 octets aléatoires, usage unique, TTL 60s)
+
+Alice → Serveur : Cert_Alice,
+                  PoP = Sign(sk_Alice, "localpki-auth-pop-v1\0" || SN_Alice || nonce_PoP)
 
 Serveur vérifie localement :
-  Hash(TBSCert_Alice) == {SI_Alice}_{pk_Alice}  (auto-signature valide)
+  Hash(TBSCert_Alice) == {SI_Alice}_{pk_Alice}   (auto-signature valide)
+  Verify(pk_Alice, PoP)                            (preuve de possession de sk_Alice)
+  → nonce_PoP est consommé : un Cert_Alice rejoué seul ne suffit plus
 
 Serveur → EN (URL_EN dans TBSCert_Alice) :
   AR = SN_Alice || SI_Alice || nonce_R
@@ -133,6 +139,8 @@ EN cherche (SN_Alice, SI_Alice) dans sa base.
 
 Serveur vérifie la signature EN, authentifie ou rejette Alice.
 ```
+
+**Preuve de possession (ajout par rapport au papier)** : le papier n'authentifie qu'un *certificat* (est-il enregistré ?). Une messagerie a besoin de prouver que *c'est bien Alice maintenant*. La SI étant une valeur publique statique, la présenter seule serait rejouable. Le serveur émet donc un challenge frais (single-use) qu'Alice signe avec `sk` — ce qui ferme le rejeu. Implémenté via `POST /auth/challenge` puis `POST /auth/verify` (cf. `CRYPTO_REVIEW.md` A1).
 
 Cette vérification a lieu **à chaque ouverture de session**. Elle n'est pas répétée à chaque message — le coût d'un aller-retour EN par message serait prohibitif et contraire à l'esprit de LocalPKI qui distingue enrollment (lourd, physique) et authentification (légère, interactive).
 
@@ -254,10 +262,12 @@ Précondition : Alice et Bob ont tous deux un certificat LocalPKI valide
 ### 5.2 Connexion d'un participant
 
 ```
-1. Alice présente Cert_Alice au serveur.
+1. Alice demande un challenge ; le serveur renvoie un nonce_PoP frais (usage unique).
+   Alice présente Cert_Alice + PoP = Sign(sk_Alice, tag || SN_Alice || nonce_PoP).
 
-2. Serveur vérifie l'auto-signature :
+2. Serveur vérifie l'auto-signature ET la preuve de possession :
    Hash(TBSCert_Alice) == {SI_Alice}_{pk_Alice}
+   Verify(pk_Alice, PoP)   (nonce consommé → pas de rejeu)
 
 3. Serveur interroge l'EN (authentification mode privé, cf. 3.2).
    Si "Unknown" → connexion refusée.
@@ -465,7 +475,7 @@ Tous les algorithmes suivants sont qualifiés par l'ANSSI (RGS v2) ou recommand�
 | Dérivation de clés | HKDF-SHA256 (RFC 5869) | Standard de facto, utilisé pour K_acte et K_send |
 | Hachage | SHA-256 | Qualifié ANSSI, utilisé dans LocalPKI |
 | Nonces | 96 bits CSPRNG | Taille recommandée pour AES-GCM |
-| Format certificat | X.509v3 auto-signé (rcgen) | Conforme à la section 5 du papier LocalPKI |
+| Format certificat | X.509v3 auto-signé (x509-cert) | Conforme à la section 5 du papier LocalPKI |
 
 ### 8.1 Paire de clés unique — décision de PoC et ses limites
 
@@ -498,12 +508,14 @@ Conformément à la section 5 du papier LocalPKI, les certificats sont des X.509
 | Champ LocalPKI | Champ X.509v3 | Valeur |
 |---|---|---|
 | SN (Serial Number) | `serialNumber` | Alloué par l'EN à la LRA |
-| SI (Signature Id) | Signature du certificat | `Sign(sk_user, SHA256(TBSCert_DER))` |
+| SI (Signature Id) | Signature du certificat | `Sign(sk_user, TBSCert_DER)` |
 | URL_EN | Extension custom ou `subjectAltName` | URL du serveur EN |
 | Identité utilisateur | `subject` (CN, O, etc.) | Données vérifiées par la LRA |
 | Validité | `notBefore` / `notAfter` | Définie par la LRA |
 
-En Rust : crate `rcgen` pour la génération, `x509-cert` pour le parsing. L'auto-signature remplace la signature CA — le certificat est techniquement un certificat racine auto-signé, exactement comme décrit dans le papier.
+En Rust : crate `x509-cert` pour l'encodage DER du `TBSCertificate` ; il n'y a pas d'étape de parsing — le `tbs_der` signé est figé en base à l'enrollment (cf. §11), ce qui découple la vérification de SI des évolutions de l'encodeur. L'auto-signature remplace la signature CA — le certificat est techniquement un certificat racine auto-signé, exactement comme décrit dans le papier.
+
+> **Précision sur SI** : l'implémentation signe le `TBSCert_DER` **directement** — `SI = Ed25519.Sign(sk_user, TBSCert_DER)`. Ed25519 applique son propre hachage interne (SHA-512) ; il n'y a pas de SHA-256 explicite avant signature. La notation `Hash(TBSCert)` du §3.1 reste l'abstraction du papier.
 
 ### 8.3 Granularité du Transparency log — décision de PoC et ses limites
 
@@ -567,7 +579,11 @@ En production, toute solution intégrée à l'infrastructure notariale français
 
 1. **Le canal LRA→EN est supprimé** : le serveur traite directement la requête `POST /enroll` sans passer par un message chiffré inter-entités. HTTPS remplace l'ECIES du papier pour le transport. La crate `localpki-core` contient néanmoins `prepare_lra_to_en_message()` qui implémente l'ECIES fidèle au papier — elle est utilisée par le `demo-cli` pour simuler le flux original, mais pas par le frontend.
 
-2. **Le notaire joue le rôle de LRA dans le frontend** : c'est le notaire connecté à l'interface web qui endosse les certificats des nouveaux participants via `enrollment.ts::endorseCert()`. Il signe `SHA256(SN||SI||pk)` avec sa clé Ed25519, et le serveur vérifie cette signature avant d'enregistrer l'identité. Dans un déploiement réel, la LRA serait une entité séparée (éventuellement un autre notaire ou un service dédié) avec ses propres clés enregistrées auprès de l'EN.
+2. **Deux chemins d'enrôlement coexistent dans le frontend** :
+   - **(défaut, démo)** la page d'accueil auto-enrôle l'utilisateur via `POST /enroll/self` : le client génère ses clés, auto-signe son TBSCert et le serveur l'enregistre **sans endossement LRA ni vérification d'identité physique**. C'est une commodité de démonstration (un correcteur s'enrôle en un clic), mais elle court-circuite l'ancre de confiance : dans ce chemin, **les identités sont auto-déclarées** — n'importe qui peut se déclarer « notaire ».
+   - **(endossé)** l'interface `/notaire/enroller` fait jouer au notaire le rôle de LRA : il endosse le certificat d'un nouveau participant via `enrollment.ts::endorseCert()` en signant `SHA256(SN||SI||pk)` avec sa clé Ed25519, et le serveur vérifie cette signature (`POST /enroll`) avant d'enregistrer l'identité.
+
+   En production, le flux endossé doit être le chemin **primaire** (ou `/enroll/self` gaté derrière un flag de build), et la LRA serait idéalement une entité séparée avec ses propres clés enregistrées auprès de l'EN. Cf. `CRYPTO_REVIEW.md` A2.
 
 **Absence de gestion de rôles formelle** : il n'existe pas de notion cryptographique de "notaire" vs "client" dans le système LocalPKI tel qu'implémenté. Le rôle de notaire est simplement le SN de l'utilisateur qui a créé l'acte (`actes.notaire_sn`). N'importe quel utilisateur enrollé peut créer un acte et devient de facto "notaire" de cet acte. En production, le rôle notaire devrait être encodé dans le TBSCert (extension X.509 custom) ou géré par l'EN via un espace de SN réservé.
 
@@ -673,7 +689,7 @@ WebAuthn deviendrait ainsi le "coffre-fort" matériel déverrouillant le reste d
 -- Registre LocalPKI (géré par l'EN)
 identities (
   sn            TEXT PRIMARY KEY,  -- Serial Number
-  si            TEXT NOT NULL,     -- Signature Id = Sign(sk_user, Hash(TBSCert_DER))
+  si            TEXT NOT NULL,     -- Signature Id = Sign(sk_user, TBSCert_DER)
   pk            TEXT NOT NULL,     -- Clé publique Ed25519 (base64url, 32 octets)
   tbs_der       TEXT NOT NULL,     -- Bytes DER exacts du TBSCert signés à l'enrollment
                                    -- (figés pour découpler la vérification de SI de la

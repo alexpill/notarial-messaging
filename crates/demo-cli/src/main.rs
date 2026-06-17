@@ -178,7 +178,7 @@ async fn cmd_enroll(name: &str, server: &str, lra_path: &str, output: &str) -> a
     let lra_sig_b64 = make_lra_signature(&lra_kp.signing_key, &cert);
     let client = ApiClient::new(server);
     let sn_hex = client.enroll(&cert, &lra.sn_hex, &lra_sig_b64).await?;
-    let session_token = client.authenticate(&cert).await?;
+    let session_token = client.authenticate(&kp.signing_key, &cert).await?;
 
     let mut identity = IdentityFile::from_keypair_and_cert(name, &kp, cert);
     identity.sn_hex = sn_hex.clone();
@@ -324,7 +324,9 @@ async fn get_or_refresh_token(identity: &IdentityFile, server: &str) -> anyhow::
         return Ok(token.clone());
     }
     let client = ApiClient::new(server);
-    client.authenticate(&identity.cert).await
+    client
+        .authenticate(&identity.signing_key()?, &identity.cert)
+        .await
 }
 
 fn now_secs() -> i64 {

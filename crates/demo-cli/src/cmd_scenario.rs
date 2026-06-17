@@ -50,7 +50,7 @@ async fn enroll_actor(
     let lra_sig_b64 = make_lra_signature(&lra_sk, &cert);
     client.enroll(&cert, &lra.sn_hex, &lra_sig_b64).await?;
 
-    let session_token = client.authenticate(&cert).await?;
+    let session_token = client.authenticate(&kp.signing_key, &cert).await?;
     let sn_hex = hex::encode(sn.0);
 
     let mut identity = IdentityFile::from_keypair_and_cert(name, &kp, cert);
@@ -81,7 +81,7 @@ async fn enroll_from_root_lra(
     let lra_sig_b64 = make_lra_signature(&root_lra.keypair.signing_key, &cert);
     client.enroll(&cert, &root_lra.sn_hex, &lra_sig_b64).await?;
 
-    let session_token = client.authenticate(&cert).await?;
+    let session_token = client.authenticate(&kp.signing_key, &cert).await?;
     let sn_hex = hex::encode(sn.0);
 
     let mut identity = IdentityFile::from_keypair_and_cert(name, &kp, cert);

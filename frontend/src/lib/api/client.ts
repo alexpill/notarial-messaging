@@ -79,8 +79,26 @@ export async function enroll(
 	return request('POST', '/enroll', { cert: certJson, lra_sn: lraSn, lra_signature: lraSignature });
 }
 
-export async function authVerify(certJson: unknown): Promise<AuthVerifyResponse> {
-	return request('POST', '/auth/verify', { cert: certJson });
+export interface ChallengeResponse {
+	challenge: string; // base64url, 32 random bytes
+	expires_at: number;
+}
+
+/** Obtain a fresh single-use login challenge to sign with sk (proof of possession). */
+export async function authChallenge(): Promise<ChallengeResponse> {
+	return request('POST', '/auth/challenge', {});
+}
+
+export async function authVerify(
+	certJson: unknown,
+	challenge: string,
+	popSignature: string
+): Promise<AuthVerifyResponse> {
+	return request('POST', '/auth/verify', {
+		cert: certJson,
+		challenge,
+		pop_signature: popSignature
+	});
 }
 
 export async function enrollSelf(certJson: unknown): Promise<EnrollResponse> {

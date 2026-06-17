@@ -3,7 +3,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { identityStore, tokenStore } from '$lib/stores/identity';
-	import { authVerify, ApiError } from '$lib/api/client';
+	import { authChallenge, authVerify, ApiError } from '$lib/api/client';
+	import { signAuthPop } from '$lib/crypto/auth';
+	import { fromBase64url } from '$lib/crypto/keys';
 	import { onMount } from 'svelte';
 
 	let identity = $state<typeof $identityStore>(null);
@@ -28,7 +30,10 @@
 		loading = true;
 		try {
 			const certJson = JSON.parse(identity.cert_json);
-			const resp = await authVerify(certJson);
+			const chal = await authChallenge();
+			const signingKey = fromBase64url(identity.signingKey);
+			const popSig = signAuthPop(signingKey, identity.sn_hex, chal.challenge);
+			const resp = await authVerify(certJson, chal.challenge, popSig);
 			if (!resp.authenticated || !resp.session_token) {
 				error =
 					"Tu n'es pas encore enregistré côté EN. Attends qu'un notaire ait approuvé ta demande.";

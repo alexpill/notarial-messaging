@@ -52,7 +52,7 @@ notarial-messaging/
 ```
 
 Pour l'architecture cryptographique et les protocoles : `ARCHITECTURE.md`.  
-Pour la structure du code et les APIs des crates : `SOFTWARE_ARCHITECTURE.md`.
+Pour la structure du code, voir l'arborescence des crates ci-dessus et les `lib.rs` de chaque crate.
 
 ---
 

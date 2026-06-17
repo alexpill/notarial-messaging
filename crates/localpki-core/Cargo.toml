@@ -16,7 +16,7 @@ hkdf          = {workspace = true}
 aes-gcm       = "0.10"
 
 
-# Génération et parsing de certificats X.509v3 auto-signés (format LocalPKI)
-rcgen         = "0.13"
+# Encodage DER des certificats X.509v3 auto-signés (format LocalPKI).
+# Pas de parsing : le tbs_der signé est figé en base à l'enrollment.
 x509-cert     = { version = "0.2", features = ["builder"] }
 time          = "0.3"

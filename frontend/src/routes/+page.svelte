@@ -6,7 +6,8 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { ed25519 } from '@noble/curves/ed25519.js';
 	import { generateKeypair, toBase64url, fromBase64url, toNumberArray } from '$lib/crypto/keys';
-	import { prepareTbs, enrollSelf, authVerify } from '$lib/api/client';
+	import { prepareTbs, enrollSelf, authChallenge, authVerify } from '$lib/api/client';
+	import { signAuthPop } from '$lib/crypto/auth';
 	import { identityStore, tokenStore, isAuthenticated } from '$lib/stores/identity';
 
 	type Role = 'notaire' | 'client';
@@ -15,7 +16,7 @@
 	const STEP_LABELS = [
 		'Génération de la paire de clés Ed25519',
 		'Construction du TBSCert (X.509v3)',
-		'Auto-signature SI = Ed25519(sk, SHA256(TBSCert_DER))',
+		'Auto-signature SI = Ed25519(sk, TBSCert_DER)',
 		"Enrôlement auprès de l'EN",
 		'Obtention du session token',
 	];
@@ -70,7 +71,9 @@
 			setStep(3, 'done');
 
 			setStep(4, 'active');
-			const authResp = await authVerify(certJson);
+			const chal = await authChallenge();
+			const popSig = signAuthPop(kp.signingKey, enrolled.serial_number, chal.challenge);
+			const authResp = await authVerify(certJson, chal.challenge, popSig);
 			if (!authResp.authenticated || !authResp.session_token)
 				throw new Error("Échec d'authentification après enrôlement");
 			tokenStore.save(authResp.session_token);

@@ -20,6 +20,12 @@ pub struct AppState {
     /// random 30-second single-use ticket; the ticket may safely appear in the
     /// WS URL because it's worthless after the handshake.
     pub ws_tickets: Mutex<HashMap<String, WsTicket>>,
+    /// Single-use login challenges for proof of possession. Maps an opaque
+    /// challenge (base64url of 32 random bytes) to its expiry. POST /auth/challenge
+    /// inserts; POST /auth/verify consumes it (remove) and checks the client's
+    /// signature over `tag || SN || nonce` with the registry pk. Same in-memory,
+    /// single-process model as `ws_tickets`.
+    pub auth_challenges: Mutex<HashMap<String, i64>>,
     /// Root LRA keypair — seeded at startup, used by POST /enroll/self so the
     /// frontend can complete enrollment in one shot without a separate notaire session.
     pub root_lra_signing_key: Mutex<ed25519_dalek::SigningKey>,
@@ -49,6 +55,7 @@ impl AppState {
             en_signing_key: Mutex::new(signing_key),
             ws_channels: Mutex::new(HashMap::new()),
             ws_tickets: Mutex::new(HashMap::new()),
+            auth_challenges: Mutex::new(HashMap::new()),
             root_lra_signing_key: Mutex::new(root_lra_signing_key),
             root_lra_sn,
         })
@@ -74,6 +81,7 @@ impl AppState {
             en_signing_key: Mutex::new(signing_key),
             ws_channels: Mutex::new(HashMap::new()),
             ws_tickets: Mutex::new(HashMap::new()),
+            auth_challenges: Mutex::new(HashMap::new()),
             root_lra_signing_key: Mutex::new(root_lra_sk),
             root_lra_sn: "test-root-lra".to_string(),
         }
