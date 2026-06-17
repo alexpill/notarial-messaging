@@ -30,6 +30,10 @@
 	let steps = $state<StepState[]>(STEP_LABELS.map(() => 'pending'));
 	let enrollError = $state('');
 	let snCopied = $state(false);
+	// Client card: "PoC auto-enroll" ON = self-enroll (one click); OFF = generate a
+	// cert to be endorsed by a notaire (real LocalPKI flow).
+	let autoEnroll = $state(true);
+	let certCopied = $state(false);
 
 	onMount(() => {
 		identityStore.init();
@@ -96,6 +100,37 @@
 		}
 	}
 
+	// Client, "auto-enroll" OFF: generate keys + self-signed cert WITHOUT registering.
+	// The identity is saved locally (no token); the client downloads the cert, a
+	// notaire endorses it (POST /enroll via /notaire/enroller), then the client logs
+	// in via /auth. sk stays in sessionStorage → same-session only (see PoC note).
+	async function startRequestEndorsement(name: string) {
+		if (!name.trim()) return;
+		enrollError = '';
+		try {
+			const kp = generateKeypair();
+			const prep = await prepareTbs({
+				subject_id: name.trim(),
+				public_key: toNumberArray(kp.verifyingKey)
+			});
+			const derBytes = fromBase64url(prep.tbs_der_b64url);
+			const si = ed25519.sign(derBytes, kp.signingKey);
+			const certJson = { tbs: prep.tbs_json, signature_id: toNumberArray(si) };
+			const snHex = prep.sn_bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+			// No token saved → the {:else if identity} branch shows the pending state.
+			identityStore.save({
+				sn_hex: snHex,
+				signingKey: toBase64url(kp.signingKey),
+				verifyingKey: toBase64url(kp.verifyingKey),
+				name: name.trim(),
+				cert_json: JSON.stringify(certJson),
+				role: 'client'
+			});
+		} catch (e) {
+			enrollError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
 	function continueAfterEnroll() {
 		const role = enrollingRole;
 		enrollingRole = null;
@@ -108,6 +143,25 @@
 		await navigator.clipboard.writeText(identity.sn_hex);
 		snCopied = true;
 		setTimeout(() => (snCopied = false), 2000);
+	}
+
+	// Export the (public) cert JSON so a notaire can endorse it. sk is never included.
+	function downloadCert() {
+		if (!identity) return;
+		const blob = new Blob([identity.cert_json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `cert-${identity.sn_hex.slice(0, 8)}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function copyCert() {
+		if (!identity) return;
+		await navigator.clipboard.writeText(identity.cert_json);
+		certCopied = true;
+		setTimeout(() => (certCopied = false), 2000);
 	}
 
 	function logout() {
@@ -239,6 +293,43 @@
 			Se déconnecter
 		</Button>
 
+	{:else if identity}
+		<!-- ── Identité générée, en attente d'endossement (switch OFF) ───────── -->
+		<Card.Root class="w-full max-w-md">
+			<Card.Header>
+				<Card.Title>Certificat généré — en attente d'endossement</Card.Title>
+				<Card.Description>
+					Ton identité est créée localement mais pas encore enregistrée par l'EN.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-3 text-sm">
+				<div class="space-y-1">
+					<p class="font-medium">{identity.name}</p>
+					<p class="font-mono text-xs text-muted-foreground break-all">SN : {identity.sn_hex}</p>
+				</div>
+				<ol class="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
+					<li>Télécharge ton certificat (ou copie-le).</li>
+					<li>Transmets-le à ton notaire → « Enrôler un client ».</li>
+					<li>Une fois endossé, reviens te connecter.</li>
+				</ol>
+				<div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+					Garde cet onglet ouvert : la clé privée vit en mémoire de session. La fermer
+					avant de te connecter perdrait l'identité.
+				</div>
+				{#if enrollError}
+					<p class="text-xs text-destructive">{enrollError}</p>
+				{/if}
+			</Card.Content>
+			<Card.Footer class="flex flex-col gap-2">
+				<div class="flex gap-2 w-full">
+					<Button class="flex-1" onclick={downloadCert}>Télécharger mon certificat</Button>
+					<Button variant="outline" onclick={copyCert}>{certCopied ? 'Copié ✓' : 'Copier'}</Button>
+				</div>
+				<Button variant="outline" class="w-full" href="/auth">Se connecter (après endossement)</Button>
+				<Button variant="ghost" class="w-full text-xs text-muted-foreground" onclick={logout}>Annuler</Button>
+			</Card.Footer>
+		</Card.Root>
+
 	{:else}
 		<!-- ── Sélection du rôle ─────────────────────────────────────────────── -->
 		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-xl">
@@ -279,27 +370,55 @@
 						Consulter mes dossiers, échanger avec mon notaire.
 					</Card.Description>
 				</Card.Header>
-				<Card.Content>
+				<Card.Content class="space-y-3">
 					<input
 						type="text"
 						bind:value={clientName}
 						placeholder="Votre nom complet"
 						class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-						onkeydown={(e) => e.key === 'Enter' && startEnroll('client', clientName)}
+						onkeydown={(e) =>
+							e.key === 'Enter' &&
+							(autoEnroll ? startEnroll('client', clientName) : startRequestEndorsement(clientName))}
 					/>
+					<label class="flex items-start gap-2 text-xs cursor-pointer">
+						<input type="checkbox" bind:checked={autoEnroll} class="mt-0.5 rounded" />
+						<span class="text-muted-foreground">
+							<span class="font-medium text-foreground">PoC : auto-enrôlement</span>
+							{#if autoEnroll}
+								— inscription immédiate, sans notaire (démo).
+							{:else}
+								— désactivé : génère ton certificat, un notaire devra l'endosser.
+							{/if}
+						</span>
+					</label>
 				</Card.Content>
 				<Card.Footer>
-					<Button
-						variant="outline"
-						class="w-full"
-						onclick={() => startEnroll('client', clientName)}
-						disabled={!clientName.trim()}
-					>
-						Entrer comme client
-					</Button>
+					{#if autoEnroll}
+						<Button
+							variant="outline"
+							class="w-full"
+							onclick={() => startEnroll('client', clientName)}
+							disabled={!clientName.trim()}
+						>
+							Entrer comme client
+						</Button>
+					{:else}
+						<Button
+							variant="outline"
+							class="w-full"
+							onclick={() => startRequestEndorsement(clientName)}
+							disabled={!clientName.trim()}
+						>
+							Générer mon certificat
+						</Button>
+					{/if}
 				</Card.Footer>
 			</Card.Root>
 		</div>
+
+		{#if enrollError}
+			<p class="text-sm text-destructive max-w-xl w-full text-center">{enrollError}</p>
+		{/if}
 
 		<!-- Badge PoC -->
 		<div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-xs text-amber-800 dark:text-amber-300 max-w-xl w-full space-y-1">
