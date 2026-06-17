@@ -142,7 +142,8 @@ pub async fn send_message(
             // Merkle leaf binds to the server's `now`, not the client-supplied timestamp:
             // a malicious client could otherwise backdate/forward-date its position in the
             // transparency log. Client `req.timestamp` remains covered by the signature/AAD
-            // — auditors compare the two to detect clock skew or client lies.
+            // and is persisted as `sent_at`; server `now` is persisted in `merkle_log.logged_at`
+            // for internal audit (not currently exposed via the API).
             let leaf = leaf_hash(&signature, &acte_uuid, now, next_seq as u64);
 
             // Rebuild the log from prior leaves + this one to compute the new root,
