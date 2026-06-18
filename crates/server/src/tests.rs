@@ -217,9 +217,9 @@ fn lra_signature(lra_sk: &ed25519_dalek::SigningKey, cert: &LocalPKICert) -> Str
 }
 
 fn fake_message_body(seq_hint: u8) -> (String, String, String) {
-    let c_message = URL_SAFE_NO_PAD.encode(&[seq_hint; 48]);
-    let nonce = URL_SAFE_NO_PAD.encode(&[seq_hint; 12]);
-    let signature = URL_SAFE_NO_PAD.encode(&[seq_hint; 64]);
+    let c_message = URL_SAFE_NO_PAD.encode([seq_hint; 48]);
+    let nonce = URL_SAFE_NO_PAD.encode([seq_hint; 12]);
+    let signature = URL_SAFE_NO_PAD.encode([seq_hint; 64]);
     (c_message, nonce, signature)
 }
 
@@ -242,7 +242,7 @@ fn signed_message_body(
     );
     (
         URL_SAFE_NO_PAD.encode(&ciphertext),
-        URL_SAFE_NO_PAD.encode(&nonce),
+        URL_SAFE_NO_PAD.encode(nonce),
         URL_SAFE_NO_PAD.encode(sig.to_bytes()),
     )
 }

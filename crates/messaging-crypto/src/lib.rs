@@ -188,9 +188,9 @@ mod tests {
         }
 
         let root = log.root().unwrap();
-        for i in 0..4 {
+        for (i, leaf) in leaves.iter().enumerate() {
             let proof = log.proof(i).unwrap();
-            assert!(MerkleLog::verify_proof(&root, &leaves[i], &proof), "proof failed for leaf {i}");
+            assert!(MerkleLog::verify_proof(&root, leaf, &proof), "proof failed for leaf {i}");
         }
     }
 
@@ -208,9 +208,9 @@ mod tests {
         }
 
         let root = log.root().unwrap();
-        for i in 0..3 {
+        for (i, leaf) in leaves.iter().enumerate() {
             let proof = log.proof(i).unwrap();
-            assert!(MerkleLog::verify_proof(&root, &leaves[i], &proof), "proof failed for leaf {i}");
+            assert!(MerkleLog::verify_proof(&root, leaf, &proof), "proof failed for leaf {i}");
         }
     }
 

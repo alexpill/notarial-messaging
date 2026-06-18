@@ -55,6 +55,7 @@ impl AppState {
 
     /// Builds a test AppState with random EN keys and a fixed test config.
     /// Use `init_pool_for_test()` to create the DB pool.
+    #[cfg(test)]
     pub fn new_for_test(db: DbPool, hsm: HsmSimulator) -> Self {
         let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
         let verifying_key = signing_key.verifying_key();

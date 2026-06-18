@@ -330,7 +330,7 @@ pub async fn get_merkle_root(
     let count = leaves.len();
     let root = MerkleLog::from_leaf_hashes(leaves)
         .root()
-        .map(|r| hex::encode(r));
+        .map(hex::encode);
 
     // The EN signature on the most recent row attests to the current root at
     // its logged_at timestamp. Older rows keep their own (root, signature, ts)

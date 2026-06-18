@@ -32,6 +32,7 @@ pub fn init_pool(database_url: &str) -> Result<DbPool, AppError> {
 }
 
 /// Creates a single-connection in-memory pool and runs migrations. Use in tests only.
+#[cfg(test)]
 pub fn init_pool_for_test() -> Result<DbPool, AppError> {
     let manager = ConnectionManager::<SqliteConnection>::new(":memory:");
     let pool = Pool::builder()

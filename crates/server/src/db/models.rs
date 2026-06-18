@@ -140,21 +140,10 @@ pub struct NewSession<'a> {
 }
 
 // ─── merkle_log ───────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Queryable, Selectable, Serialize)]
-#[diesel(table_name = merkle_log)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct MerkleEntry {
-    pub id: i64,
-    pub acte_uuid: String,
-    pub message_id: String,
-    pub leaf_hash: String,
-    /// Merkle root *after* inserting this leaf (hex 32 bytes). The column name
-    /// is historical — see ARCHITECTURE.md §11.
-    pub parent_hash: Option<String>,
-    pub en_signature: Option<String>,
-    pub logged_at: i64,
-}
+//
+// Reads go through a partial tuple select in routes::messages::get_merkle_root
+// (only 4 of the 7 columns are needed), so there is no Queryable struct here —
+// only the Insertable used at append time.
 
 #[derive(Debug, Insertable)]
 #[diesel(table_name = merkle_log)]
@@ -162,7 +151,8 @@ pub struct NewMerkleEntry<'a> {
     pub acte_uuid: &'a str,
     pub message_id: &'a str,
     pub leaf_hash: &'a str,
-    /// Stores the Merkle root post-append, not a parent leaf. See MerkleEntry.
+    /// Stores the Merkle root post-append, not a parent leaf. The column name
+    /// `parent_hash` is historical — see ARCHITECTURE.md §11.
     pub parent_hash: Option<&'a str>,
     pub en_signature: Option<&'a str>,
     pub logged_at: i64,

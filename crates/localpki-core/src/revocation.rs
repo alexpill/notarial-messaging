@@ -19,7 +19,7 @@ pub fn build_revocation_request(
     cert: &LocalPKICert,
     signing_key: &ed25519_dalek::SigningKey,
 ) -> RevocationRequest {
-    let signature = signing_key.sign(&Sha256::digest(&revocation_payload(cert)));
+    let signature = signing_key.sign(&Sha256::digest(revocation_payload(cert)));
     RevocationRequest {
         cert: cert.clone(),
         revocation_signature: signature,
@@ -32,7 +32,7 @@ pub fn validate_revocation_request(
     request: &RevocationRequest,
     lra_verifying_key: Option<&ed25519_dalek::VerifyingKey>,
 ) -> Result<(), LocalPkiError> {
-    let digest = Sha256::digest(&revocation_payload(&request.cert));
+    let digest = Sha256::digest(revocation_payload(&request.cert));
     let sig = &request.revocation_signature;
 
     let user_ok = request.cert.tbs.public_key.verify(&digest, sig).is_ok();

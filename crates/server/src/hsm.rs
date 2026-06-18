@@ -12,6 +12,9 @@ pub struct HsmSimulator {
 }
 
 impl HsmSimulator {
+    /// Direct constructor from raw key material — only used by tests; production
+    /// loads K_master via `from_env`.
+    #[cfg(test)]
     pub fn new(master_key: [u8; 32]) -> Self {
         Self { master_key: Zeroizing::new(master_key) }
     }

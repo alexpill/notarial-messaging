@@ -79,7 +79,7 @@ pub fn sign_message(
     sender_sn: &SerialNumber,
     timestamp: i64,
 ) -> ed25519_dalek::Signature {
-    signing_key.sign(&Sha256::digest(&signing_payload(ciphertext, nonce, acte_uuid, timestamp, sender_sn)))
+    signing_key.sign(&Sha256::digest(signing_payload(ciphertext, nonce, acte_uuid, timestamp, sender_sn)))
 }
 
 pub fn verify_message_signature(
@@ -92,7 +92,7 @@ pub fn verify_message_signature(
     signature: &ed25519_dalek::Signature,
 ) -> Result<(), CryptoError> {
     verifying_key
-        .verify(&Sha256::digest(&signing_payload(ciphertext, nonce, acte_uuid, timestamp, sender_sn)), signature)
+        .verify(&Sha256::digest(signing_payload(ciphertext, nonce, acte_uuid, timestamp, sender_sn)), signature)
         .map_err(|_| CryptoError::InvalidMessageSignature)
 }
 

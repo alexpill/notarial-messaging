@@ -62,7 +62,7 @@ pub fn respond_to_auth_request(
         _ => AuthStatus::Unknown,
     };
 
-    let en_signature = en_signing_key.sign(&Sha256::digest(&auth_payload(&status, request)));
+    let en_signature = en_signing_key.sign(&Sha256::digest(auth_payload(&status, request)));
 
     AuthResponse {
         status,
