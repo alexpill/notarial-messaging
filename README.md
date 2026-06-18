@@ -55,8 +55,13 @@ notarial-messaging/
 └── frontend/              # interface SvelteKit (notaire + clients)
 ```
 
-Pour l'architecture cryptographique et les protocoles : `ARCHITECTURE.md`.  
 Pour la structure du code, voir l'arborescence des crates ci-dessus et les `lib.rs` de chaque crate.
+
+**Documentation :**
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — protocoles LocalPKI, hiérarchie de clés, choix cryptographiques et limites assumées.
+- [`docs/CRYPTO_REVIEW.md`](docs/CRYPTO_REVIEW.md) — revue de sécurité (findings, conformité, plan d'action).
+- [`docs/DEMO.md`](docs/DEMO.md) — tutoriel pas-à-pas illustré (enrôlement → messagerie → Merkle).
+- [`docs/METHODOLOGIE.md`](docs/METHODOLOGIE.md) — démarche, choix de conception et usage de l'IA.
 
 ---
 
@@ -239,16 +244,16 @@ serveur ne reçoit que des données chiffrées et des signatures.
 clés de session sont éphémères et l'historique ne peut pas être rejoué. En
 pratique notariale, l'archivage légal de l'historique est une exigence dure. Ces
 deux propriétés sont fondamentalement contradictoires ; ce projet choisit
-l'archivage. Voir `ARCHITECTURE.md` §10.1.
+l'archivage. Voir [`ARCHITECTURE.md` §10.1](docs/ARCHITECTURE.md#101-limites-assumées-choix-délibérés).
 
 **Signature sur le chiffré, pas le clair.** Le serveur peut rejeter les forgeries
 avant stockage sans jamais déchiffrer. La non-répudiation sur le contenu est
 préservée transitivement : AES-256-GCM (AEAD) lie le chiffré à un unique clair.
-Voir `ARCHITECTURE.md` §5.3.
+Voir [`ARCHITECTURE.md` §5.3](docs/ARCHITECTURE.md#53-envoi-dun-message).
 
 **Paire de clés unique Ed25519.** Pragmatisme PoC — la même clé sert à la
 signature (identité) et au chiffrement asymétrique (conversion Ed25519→X25519).
-En production, deux paires distinctes seraient requises. Voir `ARCHITECTURE.md` §8.1.
+En production, deux paires distinctes seraient requises. Voir [`ARCHITECTURE.md` §8.1](docs/ARCHITECTURE.md#81-paire-de-clés-unique--décision-de-poc-et-ses-limites).
 
 **Chiffrement côté client.** Le serveur est aveugle au contenu, conforme aux
 obligations de secret professionnel du notariat et à l'esprit LocalPKI où la
@@ -259,7 +264,7 @@ vit dans le registre de l'EN, jamais dans le TBSCert auto-signé (qui serait
 auto-déclaré). L'EN désigne ses notaires via un jeton d'enrôlement ; seul un
 notaire peut endosser un client (`POST /enroll`) ou créer un acte (`POST /actes`).
 C'est l'alignement avec le papier (§2.1 : « the LRA is registered by some EN »).
-Voir `ARCHITECTURE.md` §10.1.
+Voir [`ARCHITECTURE.md` §10.1](docs/ARCHITECTURE.md#101-limites-assumées-choix-délibérés).
 
 ---
 
@@ -267,13 +272,13 @@ Voir `ARCHITECTURE.md` §10.1.
 
 - HSM simulé par variable d'environnement (pas de matériel réel)
 - Timestamps serveur uniquement — pas de TSA qualifiée RFC 3161
-- Paire de clés Ed25519 unique par utilisateur (cf. `ARCHITECTURE.md` §8.1)
+- Paire de clés Ed25519 unique par utilisateur (cf. [`ARCHITECTURE.md` §8.1](docs/ARCHITECTURE.md#81-paire-de-clés-unique--décision-de-poc-et-ses-limites))
 - L'accès à l'historique pour un nouveau participant est une garantie UI, pas crypto
 - La révocation en cours de session n'est pas propagée en temps réel
 - Clés stockées en `sessionStorage` (fermer l'onglet efface l'identité)
 - Rotation de `K_master` impossible sans re-chiffrement de tous les actes
 
-Toutes les limites sont documentées et justifiées dans `ARCHITECTURE.md` §10.
+Toutes les limites sont documentées et justifiées dans [`ARCHITECTURE.md` §10](docs/ARCHITECTURE.md#10-limites-assumées-et-perspectives).
 
 ---
 

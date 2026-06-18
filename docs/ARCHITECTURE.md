@@ -140,7 +140,7 @@ EN cherche (SN_Alice, SI_Alice) dans sa base.
 Serveur vérifie la signature EN, authentifie ou rejette Alice.
 ```
 
-**Preuve de possession (ajout par rapport au papier)** : le papier n'authentifie qu'un *certificat* (est-il enregistré ?). Une messagerie a besoin de prouver que *c'est bien Alice maintenant*. La SI étant une valeur publique statique, la présenter seule serait rejouable. Le serveur émet donc un challenge frais (single-use) qu'Alice signe avec `sk` — ce qui ferme le rejeu. Implémenté via `POST /auth/challenge` puis `POST /auth/verify` (cf. `CRYPTO_REVIEW.md` A1).
+**Preuve de possession (ajout par rapport au papier)** : le papier n'authentifie qu'un *certificat* (est-il enregistré ?). Une messagerie a besoin de prouver que *c'est bien Alice maintenant*. La SI étant une valeur publique statique, la présenter seule serait rejouable. Le serveur émet donc un challenge frais (single-use) qu'Alice signe avec `sk` — ce qui ferme le rejeu. Implémenté via `POST /auth/challenge` puis `POST /auth/verify` (cf. [`CRYPTO_REVIEW.md` A1](CRYPTO_REVIEW.md#a1--le-login-ne-prouve-pas-la-possession-de-la-clé-privée)).
 
 Cette vérification a lieu **à chaque ouverture de session**. Elle n'est pas répétée à chaque message — le coût d'un aller-retour EN par message serait prohibitif et contraire à l'esprit de LocalPKI qui distingue enrollment (lourd, physique) et authentification (légère, interactive).
 
@@ -543,7 +543,7 @@ L'architecture actuelle est conçue pour permettre cette migration : les clés s
 
 `K_send_Alice = HKDF(K_acte, "send" || SN_Alice)` est **fixe pour toute la durée de vie de l'acte**. Chaque message chiffre avec cette même clé sous un **nonce AES-GCM aléatoire de 96 bits**. La sécurité repose donc entièrement sur la non-collision de ces nonces : une réutilisation de nonce sous GCM est catastrophique (fuite du XOR des clairs *et* récupération du sous-clé d'authentification ⇒ forgerie). La borne d'anniversaire place le risque à ≈ 2³² messages **par participant et par acte** — plusieurs ordres de grandeur au-dessus des volumes notariaux réalistes d'un dossier. L'hypothèse est donc tenue ici sans compteur de repli.
 
-Si cette marge devenait insuffisante (usage à très haut volume), deux réponses propres : (a) **XChaCha20-Poly1305** (nonce 192 bits ⇒ collision aléatoire négligeable, aucun état à maintenir), ou (b) un **nonce déterministe à compteur** par `K_send`. La première est préférable car sans état ; elle dévierait toutefois de la décision « AES-256-GCM » figée pour ce PoC (cf. `CLAUDE.md`).
+Si cette marge devenait insuffisante (usage à très haut volume), deux réponses propres : (a) **XChaCha20-Poly1305** (nonce 192 bits ⇒ collision aléatoire négligeable, aucun état à maintenir), ou (b) un **nonce déterministe à compteur** par `K_send`. La première est préférable car sans état ; elle dévierait toutefois de la décision « AES-256-GCM » figée pour ce PoC (cf. [`CLAUDE.md`](../CLAUDE.md)).
 
 ---
 

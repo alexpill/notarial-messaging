@@ -72,7 +72,7 @@ Une fois l'implémentation terminée, j'ai testé l'ensemble des fonctionnalité
 
 Pour la documentation, j'ai demandé à l'IA de compléter au fur et à mesure de mes retours, mes interrogations et critiques, en veillant à maintenir la cohérence avec le code.
 
-En bonus, j'ai demandé à l'IA de générer le document `DEMO.md` de façon entièrement autonome, afin d'évaluer sa capacité à produire un contenu illustré avec captures d'écran et explications.
+En bonus, j'ai demandé à l'IA de générer le document [`DEMO.md`](DEMO.md) de façon entièrement autonome, afin d'évaluer sa capacité à produire un contenu illustré avec captures d'écran et explications.
 
 ## Résultat et limites
 

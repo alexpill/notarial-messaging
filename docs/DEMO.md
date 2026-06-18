@@ -138,7 +138,7 @@ La partie ne verra que les messages **postérieurs** à son ajout.
 
 > Remarque : « sans historique » est une restriction d'**interface**, pas une
 > garantie cryptographique (le détenteur de `K_acte` pourrait techniquement
-> déchiffrer l'historique). C'est documenté dans `ARCHITECTURE.md` §5.5 / §10.1.
+> déchiffrer l'historique). C'est documenté dans [`ARCHITECTURE.md` §5.5](ARCHITECTURE.md#55-ajout-dun-participant-a-posteriori) / [§10.1](ARCHITECTURE.md#101-limites-assumées-choix-délibérés).
 
 ---
 
@@ -171,15 +171,15 @@ conversation :
   reste un raccourci démo (rôle `client`) ; le flux endossé (switch désactivé +
   « Enrôler un client ») est le parcours de confiance. Côté serveur, seul un
   `role=notaire` peut endosser un client ou créer un acte. Détails dans
-  `ARCHITECTURE.md` §10.1.
+  [`ARCHITECTURE.md` §10.1](ARCHITECTURE.md#101-limites-assumées-choix-délibérés).
 - **Identité non persistante** : fermer l'onglet efface l'identité (clés en
   `sessionStorage`). Il n'y a pas de « se reconnecter plus tard comme Alice » —
   garde l'onglet ouvert le temps de la démo.
 - **Une identité par onglet** : utilise des onglets séparés pour jouer plusieurs
   personnes en parallèle.
 
-Toutes les limites sont documentées et justifiées dans `ARCHITECTURE.md` §10 et
-`CRYPTO_REVIEW.md`.
+Toutes les limites sont documentées et justifiées dans [`ARCHITECTURE.md` §10](ARCHITECTURE.md#10-limites-assumées-et-perspectives) et
+[`CRYPTO_REVIEW.md`](CRYPTO_REVIEW.md).
 
 ---
 
