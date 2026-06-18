@@ -38,7 +38,7 @@ J'ai donc décidé de partir sur un modèle serveur centralisé, avec une dériv
 
 Le document [ARCHITECTURE.md — §3 Couche identité](ARCHITECTURE.md#3-couche-identité--protocoles-localpki) détaille plus précisément comment fonctionne le protocole mais dans les grandes lignes je reprends déjà toute la partie enrôlement et authentification du papier LocalPKI.
 
-Pour ce qui est de la messagerie, les clés `K_acte` sont dérivées via HKDF depuis la clé HSM (matérielle) `K_master`. Ces clés sont ensuite envoyées aux participants via le protocole `ECIES` (`C_acte_Alice`, `C_acte_bob`) afin de garantir la sécurité de leur envoi. Pour l'envoi d'un message, chaque participant va devoir générer sa clé `K_send_participant` puis appliquer `AES-256-GCM` sur son message puis signer le message.
+Pour ce qui est de la messagerie, les clés `K_acte` sont dérivées via HKDF depuis la clé HSM (matérielle) `K_master`. Ces clés sont ensuite envoyées aux participants via le protocole `ECIES` (`C_acte_Alice`, `C_acte_Bob`) afin de garantir la sécurité de leur envoi. Pour l'envoi d'un message, chaque participant va devoir générer sa clé `K_send_participant` puis appliquer `AES-256-GCM` sur son message puis signer le message.
 
 Deux points méritent d'être précisés, le premier étant qu'en l'état n'importe quel participant peut créer la clé K_send d'un autre participant mais l'on règle ce problème en vérifiant la signature qui n'est pas falsifiable. Le deuxième point est que l'on ne signe pas le plaintext mais bien le ciphertext, ce qui permet au serveur de vérifier la signature sans devoir déchiffrer le message.
 
