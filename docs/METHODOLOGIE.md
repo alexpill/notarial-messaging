@@ -3,7 +3,7 @@
 ## Avant propos
 Ce document a pour but de détailler comment j'ai travaillé sur ce tests technique.
 
-L'IA ayant été autorisée, je me suis d'en utiliser différentes aussi bien pour la recherche de documentation et de sources que pour la rédaction des documents d'architecture et la génération de code.
+L'IA ayant été autorisée, je me suis permis d'en utiliser plusieurs pour m'aider dans ce travail, aussi bien pour la recherche de documentation et de sources que pour la rédaction des documents d'architecture et la génération de code.
 
 ## Choix du sujet
 Pour choisir un des trois sujets je me suis basé sur ce que je considérais être mes connaissances dans chacun des 3 sujets ainsi que sur l'intérêts que je pouvais porter à chacun.
@@ -40,5 +40,5 @@ Après des recherches sur les différents protocols, il s'est avéré que le pro
 - pour le moment aps de cross-certification accross différente EN donc si bob est sur le meme EN qu'alice pour le moment on fait pas
 - on a deux fois la meme définition des foncion messaging une fois dans la crate messaging-crypto et l'autre dans le frontend et c'est normal parce qu'il faut bien que le forntend puisse faire tout ce qui est derive_k_send et aussi ecies pour les messages
 - pour des raisons de simplification notre serveur fait a la fois EN et LRA puisque c'est pas tant le sujet du projet 
-- pour le moment pas de vrai gestion de role on part du principe que le notaire d'un acte c'est jsute celui qui a crée un acte et donc il est enregistrer en base dans acte.notaire_sn 
+- on a maintenant une vraie gestion de role (notaire/client) côté EN dans identities.role. le role notaire s'obtient via un jeton d'enrôlement (POST /enroll/notaire — l'EN désigne ses notaires, la clé privée reste dans le navigateur, seul le jeton transite) et on gate /enroll (seul un notaire peut endosser un client) et /actes (seul un notaire peut créer un acte). la chaine EN -> notaire -> client est donc imposée. plus de "Root LRA" (c'était source de confusion + non-idempotent au démarrage). le notaire.notaire_sn de l'acte reste celui qui l'a créé mais maintenant il faut etre role=notaire pour ça
 - juste une auth par session token

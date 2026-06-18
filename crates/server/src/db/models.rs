@@ -19,6 +19,10 @@ pub struct Identity {
     pub lra_id: String,
     pub registered_at: i64,
     pub revoked_at: Option<i64>,
+    /// Trust role in the EN registry: "notaire" or "client". Anchors the
+    /// EN → notaire → client hierarchy. Set by a trusted process (notaire
+    /// enrollment token / operator), never by the self-signed cert.
+    pub role: String,
 }
 
 #[derive(Debug, Insertable)]
@@ -32,6 +36,7 @@ pub struct NewIdentity<'a> {
     pub lra_id: &'a str,
     pub registered_at: i64,
     pub revoked_at: Option<i64>,
+    pub role: &'a str,
 }
 
 // ─── actes ───────────────────────────────────────────────────────────────────

@@ -82,6 +82,13 @@ echo "HSM_MASTER_KEY_HEX=$(openssl rand -hex 32)" >> .env
 echo "EN_SIGNING_KEY_HEX=$(openssl rand -hex 32)" >> .env
 ```
 
+`.env.example` fixe aussi un `NOTAIRE_ENROLLMENT_TOKEN` de démo (le **jeton
+d'enrôlement notaire** — l'autorité de l'EN pour désigner un notaire). En dev,
+gardez la valeur par défaut et copiez la même dans `frontend/.env` pour que
+l'interface puisse l'afficher. En production, laissez ce champ **vide** : un
+jeton aléatoire est généré à chaque démarrage et imprimé une fois dans les logs
+(secret opérateur, jamais envoyé au navigateur).
+
 ### 2. Démarrer le serveur
 
 ```bash
@@ -94,10 +101,15 @@ cargo run -p server
 
 ```bash
 cd frontend
+cp .env.example .env   # jeton notaire de démo (doit matcher le .env racine)
 npm install
 npm run dev
 # Interface disponible sur http://localhost:5173
 ```
+
+> En mode dev, la page d'accueil affiche un encart « PoC » avec le jeton
+> d'enrôlement notaire prérempli — un correcteur devient notaire en un clic. La
+> clé privée du notaire reste dans le navigateur ; seul le jeton transite.
 
 ### 4. Démonstration CLI (flux complet automatique)
 
@@ -106,26 +118,26 @@ npm run dev
 cargo run -p demo-cli -- scenario --server http://localhost:3000
 ```
 
-> Le scénario insère d'abord un Root LRA directement en base (bootstrap
-> nécessaire car `POST /enroll` requiert un LRA existant), puis fait tout le
-> reste via l'API HTTP.
+> Le scénario **amorce un notaire** par insertion directe en base avec le rôle
+> `notaire` (`bootstrap_notaire.json`) — c'est l'EN qui désigne son notaire,
+> hors API (l'unique opération privilégiée). Ce notaire endosse ensuite les
+> clients et crée l'acte via l'API HTTP.
 
 ---
 
 ## Utilisation du CLI en détail
 
 Les commandes CLI nécessitent des fichiers d'identité JSON générés lors de
-l'enrollment. La commande `scenario` génère ces fichiers automatiquement.
-Vous pouvez aussi les construire étape par étape :
+l'enrollment. La commande `scenario` génère ces fichiers automatiquement
+(`bootstrap_notaire.json`, `notaire.json`, `alice.json`, `bob.json`). Vous
+pouvez aussi les construire étape par étape :
 
 ```bash
-# 1. Enrollment du notaire (nécessite un Root LRA — lancez scenario une fois d'abord)
-cargo run -p demo-cli -- enroll \
-  --name "Maître Dupont" \
-  --lra root_lra.json \
-  --output notaire.json
+# 1. Amorcer le notaire (l'EN le désigne — seed direct DB, role=notaire).
+#    `scenario` le fait une fois et écrit notaire.json / bootstrap_notaire.json.
+#    Le notaire (role=notaire) est l'endosseur requis pour enrôler des clients.
 
-# 2. Enrollment d'Alice (notaire joue le rôle LRA)
+# 2. Enrollment d'Alice (le notaire joue le rôle LRA — endossement gaté role=notaire)
 cargo run -p demo-cli -- enroll \
   --name "Alice Martin" \
   --lra notaire.json \
@@ -176,9 +188,9 @@ cargo run -p demo-cli -- enroller \
 L'interface SvelteKit distingue deux rôles :
 
 **Notaire** (`/notaire/`)
-- `/enroll` — générer sa propre paire de clés et s'enregistrer
+- page d'accueil → « Je suis notaire » + **jeton d'enrôlement** → enregistré avec le rôle `notaire` (clé générée et conservée dans le navigateur)
 - `/notaire/actes` — tableau de bord des actes en cours
-- `/notaire/actes/new` — créer un nouvel acte notarial
+- `/notaire/actes/new` — créer un nouvel acte (réservé au rôle `notaire`)
 - `/notaire/enroller` — enrôler un client (face-à-face, rôle LRA)
 
 **Clients** (Alice, Bob, …)
@@ -237,6 +249,13 @@ En production, deux paires distinctes seraient requises. Voir `ARCHITECTURE.md` 
 **Chiffrement côté client.** Le serveur est aveugle au contenu, conforme aux
 obligations de secret professionnel du notariat et à l'esprit LocalPKI où la
 confiance n'est jamais déléguée à un intermédiaire pour le contenu.
+
+**Hiérarchie de confiance EN → notaire → client.** Le rôle (`notaire`/`client`)
+vit dans le registre de l'EN, jamais dans le TBSCert auto-signé (qui serait
+auto-déclaré). L'EN désigne ses notaires via un jeton d'enrôlement ; seul un
+notaire peut endosser un client (`POST /enroll`) ou créer un acte (`POST /actes`).
+C'est l'alignement avec le papier (§2.1 : « the LRA is registered by some EN »).
+Voir `ARCHITECTURE.md` §10.1.
 
 ---
 

@@ -579,13 +579,12 @@ En production, toute solution intégrée à l'infrastructure notariale français
 
 1. **Le canal LRA→EN est supprimé** : le serveur traite directement la requête `POST /enroll` sans passer par un message chiffré inter-entités. HTTPS remplace l'ECIES du papier pour le transport. La crate `localpki-core` contient néanmoins `prepare_lra_to_en_message()` qui implémente l'ECIES fidèle au papier — elle est utilisée par le `demo-cli` pour simuler le flux original, mais pas par le frontend.
 
-2. **Deux chemins d'enrôlement coexistent dans le frontend** :
-   - **(défaut, démo)** la page d'accueil auto-enrôle l'utilisateur via `POST /enroll/self` : le client génère ses clés, auto-signe son TBSCert et le serveur l'enregistre **sans endossement LRA ni vérification d'identité physique**. C'est une commodité de démonstration (un correcteur s'enrôle en un clic), mais elle court-circuite l'ancre de confiance : dans ce chemin, **les identités sont auto-déclarées** — n'importe qui peut se déclarer « notaire ».
-   - **(endossé)** l'interface `/notaire/enroller` fait jouer au notaire le rôle de LRA : il endosse le certificat d'un nouveau participant via `enrollment.ts::endorseCert()` en signant `SHA256(SN||SI||pk)` avec sa clé Ed25519, et le serveur vérifie cette signature (`POST /enroll`) avant d'enregistrer l'identité.
+2. **Trois chemins d'enrôlement, stratifiés par rôle** (le rôle vit dans le registre EN — cf. ci-dessous) :
+   - `POST /enroll/notaire` — la personne génère ses clés **dans le navigateur**, auto-signe son TBSCert, et présente le **jeton d'enrôlement notaire**. Le serveur vérifie le jeton (comparaison constante-time) et enregistre l'identité avec `role = notaire`. La clé privée ne transite jamais ; seul le jeton (l'autorité d'amorçage de l'EN) circule.
+   - `POST /enroll` (endossé) — `/notaire/enroller` fait jouer au notaire le rôle de LRA : il endosse le cert d'un client via `enrollment.ts::endorseCert()` (signature Ed25519 sur `SHA256(SN||SI||pk)`). Le serveur vérifie la signature **et que l'endosseur a `role = notaire`** avant d'enregistrer le client (`role = client`).
+   - `POST /enroll/self` — raccourci démo : le client s'auto-enrôle en un clic, toujours avec `role = client`. Il ne peut **jamais** se déclarer notaire (cela exige le jeton). L'ancre de confiance n'est donc pas contournée pour les rôles privilégiés.
 
-   En production, le flux endossé doit être le chemin **primaire** (ou `/enroll/self` gaté derrière un flag de build), et la LRA serait idéalement une entité séparée avec ses propres clés enregistrées auprès de l'EN. Cf. `CRYPTO_REVIEW.md` A2.
-
-**Absence de gestion de rôles formelle** : il n'existe pas de notion de "notaire" vs "client" dans le système tel qu'implémenté. Le rôle de notaire est simplement le SN de l'utilisateur qui a créé l'acte (`actes.notaire_sn`), et `POST /enroll` accepte *n'importe quelle* identité enrôlée comme endosseur (LRA). Le rôle ne peut pas être porté par le TBSCert : celui-ci est **auto-signé**, donc un rôle qui y figurerait serait auto-déclaré et sans valeur. Sa place correcte est **côté EN, dans le registre des identités** — un attribut `role` sur le SN, posé par un processus de confiance (seed au démarrage ou commande opérateur), jamais par le client. Le point d'ancrage se réduit alors à une seule vérification : `POST /enroll` n'accepte un endossement que si `lra_sn.role == notaire`, ce qui établit la chaîne **Root LRA → notaire → client**. Non implémenté dans le PoC (cf. `CRYPTO_REVIEW.md` A2) : le frontend conserve un self-enroll étiqueté « démo », et le flux endossé est démontrable via `/notaire/enroller` et le `demo-cli`.
+**Gestion des rôles (implémentée)** : le registre des identités porte un attribut `role ∈ {notaire, client}` (colonne `identities.role`, défaut `client`). Le rôle **ne peut pas** vivre dans le TBSCert auto-signé (il serait auto-déclaré) ; sa place est **côté EN**. Il est posé par un processus de confiance : le **jeton d'enrôlement notaire** (l'EN désigne ses notaires — fidèle au papier §2.1 « the LRA is registered by some EN ») ou un seed opérateur (le `demo-cli` insère le notaire d'amorçage directement en base). Deux gates en découlent : `POST /enroll` n'accepte un endossement que si `lra_sn.role == notaire`, et `POST /actes` n'autorise la création d'acte que pour un `role == notaire`. La chaîne **EN → notaire → client** est ainsi *imposée*, pas seulement *possible*. Le jeton est réutilisable (plusieurs notaires) ; en dev il est fixe via `.env` et affiché dans l'UI, en prod il est aléatoire par démarrage et imprimé dans les logs (secret opérateur).
 
 **Pas de forward secrecy sur les messages** : contrairement à Signal, les messages passés peuvent être déchiffrés si `K_acte` est compromise. Ce choix est délibéré et nécessaire pour l'archivage légal. Forward secrecy et archivage légal sont des propriétés fondamentalement contradictoires dans le modèle actuel.
 
@@ -695,9 +694,12 @@ identities (
                                    -- (figés pour découpler la vérification de SI de la
                                    --  version de la crate x509-cert — cf. ORAL_DEFENSE §17)
   subject_id    TEXT NOT NULL,     -- Label d'affichage (UI), hors noyau crypto
-  lra_id        TEXT NOT NULL,     -- LRA ayant vérifié l'identité
+  lra_id        TEXT NOT NULL,     -- LRA ayant vérifié l'identité (ou sentinelle
+                                   --  "en:notaire-token" / "en:self-enroll-demo")
   registered_at BIGINT NOT NULL,   -- Unix timestamp
-  revoked_at    BIGINT             -- NULL si actif
+  revoked_at    BIGINT,            -- NULL si actif
+  role          TEXT NOT NULL      -- "notaire" | "client" (défaut "client").
+                                   --  Ancre EN→notaire→client : gate /enroll et /actes.
 )
 
 -- Actes notariaux (dossiers)

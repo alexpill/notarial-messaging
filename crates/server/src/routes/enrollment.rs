@@ -11,6 +11,16 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+/// Trust roles stored on identities in the EN registry. The role anchors the
+/// EN → notaire → client hierarchy and gates endorsement + acte creation.
+pub const ROLE_NOTAIRE: &str = "notaire";
+pub const ROLE_CLIENT: &str = "client";
+
+/// Sentinel `lra_id` values for identities not endorsed by a named notaire.
+/// `lra_id` is a plain label column (no FK), so these are safe.
+const LRA_ID_NOTAIRE_TOKEN: &str = "en:notaire-token";
+const LRA_ID_SELF_ENROLL: &str = "en:self-enroll-demo";
+
 #[derive(Debug, Deserialize)]
 pub struct EnrollRequest {
     /// User's self-signed LocalPKI certificate (JSON-serialized).
@@ -44,11 +54,20 @@ pub async fn enroll(
         .check(crate::utils::unix_now()?)
         .map_err(|e| AppError::BadRequest(format!("certificate validity: {e}")))?;
 
-    // The LRA's trustworthiness is established by its own presence in the EN registry.
-    // No hardcoded LRA key — any enrolled and non-revoked identity can act as LRA.
+    // The endorser must be a registered, non-revoked identity carrying the
+    // `notaire` role. This is the LocalPKI trust anchor: per the paper (§2.1)
+    // the EN designates its LRAs — here, an identity is a notaire only if the EN
+    // registry says so (set via /enroll/notaire or an operator), never by a
+    // self-declared cert. Establishes the chain EN → notaire → client.
     let lra = registry::lookup_identity(&state.db, req.lra_sn.clone())
         .await?
         .ok_or_else(|| AppError::NotFound(format!("LRA '{}' not found or revoked", req.lra_sn)))?;
+
+    if lra.role != ROLE_NOTAIRE {
+        return Err(AppError::Forbidden(
+            "endorser is not a notaire — only a notaire may endorse a client".into(),
+        ));
+    }
 
     let pk_lra = ed25519_dalek::VerifyingKey::from_bytes(&decode_b64(&lra.pk, "LRA pk")?)
         .map_err(|_| AppError::BadRequest("LRA public key is not a valid Ed25519 key".into()))?;
@@ -88,6 +107,7 @@ pub async fn enroll(
             lra_id: &req.lra_sn,
             registered_at: crate::utils::unix_now()?,
             revoked_at: None,
+            role: ROLE_CLIENT,
         },
     )
     .await?;
@@ -189,10 +209,12 @@ pub struct EnrollSelfRequest {
     pub cert: serde_json::Value,
 }
 
-/// One-shot enrollment using the server's Root LRA. The client presents its
-/// self-signed cert and the server endorses it immediately.
-/// This exists solely to make the demo work without a separate notaire session:
-/// the correcteur opens the frontend, generates keys, and is enrolled in one click.
+/// One-shot **client** self-enrollment — a demo shortcut. The client presents
+/// its self-signed cert and the server registers it immediately as a `client`
+/// (no endorsement, no physical identity check). This exists solely so a
+/// reviewer can enroll a client in one click; it can never mint a notaire (that
+/// requires the enrollment token via /enroll/notaire). The trust anchor is not
+/// bypassed for privileged roles.
 pub async fn enroll_self(
     State(state): State<Arc<AppState>>,
     Json(req): Json<EnrollSelfRequest>,
@@ -223,9 +245,10 @@ pub async fn enroll_self(
             pk: &URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes()),
             tbs_der: &URL_SAFE_NO_PAD.encode(&tbs_der),
             subject_id: &cert.tbs.subject_id,
-            lra_id: &state.root_lra_sn,
+            lra_id: LRA_ID_SELF_ENROLL,
             registered_at: crate::utils::unix_now()?,
             revoked_at: None,
+            role: ROLE_CLIENT,
         },
     )
     .await?;
@@ -234,7 +257,90 @@ pub async fn enroll_self(
         StatusCode::CREATED,
         Json(EnrollResponse {
             serial_number: sn_hex,
-            message: "enrolled via root LRA".to_string(),
+            message: "enrolled as client (self-enroll demo)".to_string(),
         }),
     ))
+}
+
+// ─── Notaire enrollment (token-gated bootstrap) ──────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct EnrollNotaireRequest {
+    /// Self-signed LocalPKI certificate, keys generated client-side.
+    pub cert: serde_json::Value,
+    /// Notaire enrollment token (the EN's bootstrap authority). The private key
+    /// never transits — only this token does.
+    pub token: String,
+}
+
+/// Enrolls a `notaire` after verifying the EN's notaire enrollment token. The
+/// client generates its keys in the browser and self-signs the cert (exactly
+/// like a client); presenting the valid token is what makes the EN grant the
+/// `notaire` role. Reusable: the token can designate several notaires.
+pub async fn enroll_notaire(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<EnrollNotaireRequest>,
+) -> Result<(StatusCode, Json<EnrollResponse>), AppError> {
+    let cert: LocalPKICert = serde_json::from_value(req.cert)
+        .map_err(|e| AppError::BadRequest(format!("invalid certificate: {e}")))?;
+
+    verify_signature_id(&cert)
+        .map_err(|_| AppError::BadRequest("invalid signature ID (SI)".into()))?;
+
+    cert.tbs
+        .validity
+        .check(crate::utils::unix_now()?)
+        .map_err(|e| AppError::BadRequest(format!("certificate validity: {e}")))?;
+
+    // Constant-time token check — avoids a timing oracle on the bootstrap secret.
+    if !ct_eq(
+        req.token.as_bytes(),
+        state.config.notaire_enrollment_token.as_bytes(),
+    ) {
+        return Err(AppError::Forbidden("invalid notaire enrollment token".into()));
+    }
+
+    let sn_hex = hex::encode(cert.tbs.serial_number.0);
+
+    let tbs_der = cert
+        .tbs
+        .to_der()
+        .map_err(|e| AppError::BadRequest(format!("DER encoding failed: {e}")))?;
+
+    registry::insert_identity(
+        &state.db,
+        NewIdentity {
+            sn: &sn_hex,
+            si: &URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes()),
+            pk: &URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes()),
+            tbs_der: &URL_SAFE_NO_PAD.encode(&tbs_der),
+            subject_id: &cert.tbs.subject_id,
+            lra_id: LRA_ID_NOTAIRE_TOKEN,
+            registered_at: crate::utils::unix_now()?,
+            revoked_at: None,
+            role: ROLE_NOTAIRE,
+        },
+    )
+    .await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(EnrollResponse {
+            serial_number: sn_hex,
+            message: "enrolled as notaire (token)".to_string(),
+        }),
+    ))
+}
+
+/// Length-checked constant-time byte comparison. The length check leaks length
+/// (acceptable for a fixed-length-ish token); the byte loop does not short-circuit.
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }

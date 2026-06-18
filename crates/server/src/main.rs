@@ -25,11 +25,15 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::init_pool(&config.database_url)?;
     let hsm = hsm::HsmSimulator::from_env()?;
 
-    let en_url = format!("http://{}:{}", config.server_host, config.server_port);
-    let (root_lra_kp, root_lra_sn) = en::registry::seed_root_lra(&pool, &en_url).await?;
-    tracing::info!("Root LRA seeded — SN: {}", root_lra_sn);
+    // The notaire enrollment token is the EN's bootstrap authority to designate
+    // notaires (POST /enroll/notaire). Printed once here — in dev it's the fixed
+    // value from .env; in prod it's a random per-boot operator secret.
+    tracing::info!(
+        "Notaire enrollment token (POST /enroll/notaire): {}",
+        config.notaire_enrollment_token
+    );
 
-    let state = Arc::new(state::AppState::new(pool, hsm, config.clone(), root_lra_kp.signing_key, root_lra_sn)?);
+    let state = Arc::new(state::AppState::new(pool, hsm, config.clone())?);
     let app = routes::build_router(state);
 
     let addr = format!("{}:{}", config.server_host, config.server_port);

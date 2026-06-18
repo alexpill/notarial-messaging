@@ -1,36 +1,40 @@
-// Bootstrap Root LRA — seeded directly in SQLite because the server's POST
-// /enroll requires an existing LRA in the registry. Every other operation in
-// the demo goes through the HTTP API. This is the only out-of-band path.
+// Bootstrap notaire — seeded directly in SQLite with role=notaire. This is the
+// EN designating its first notaire out-of-band (paper §2.1: "the LRA is
+// registered by some EN"), the one privileged operation that can't go through
+// the role-gated HTTP API. Every other operation in the demo uses the API.
 
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use localpki_core::{
-    cert::SerialNumber,
+    cert::{LocalPKICert, SerialNumber},
     crypto::KeyPair,
     enrollment::{EnrollmentChallenge, create_self_signed_cert},
 };
 
 use crate::identity::IdentityFile;
 
-pub struct RootLra {
+pub struct BootstrapNotaire {
     pub keypair: KeyPair,
     pub sn_hex: String,
+    pub cert: LocalPKICert,
 }
 
-/// File next to the DB that persists the Root LRA's keypair across runs.
+/// File next to the DB that persists the bootstrap notaire's keypair across runs.
 /// Without this, every `demo-cli scenario` invocation would generate a fresh
-/// Root LRA and leave the previous ones as orphaned rows in `identities`.
-const ROOT_LRA_FILE: &str = "root_lra.json";
+/// notaire and leave the previous ones as orphaned rows in `identities`.
+const BOOTSTRAP_NOTAIRE_FILE: &str = "bootstrap_notaire.json";
 
-/// Seeds a Root LRA into SQLite if none is recorded locally yet; otherwise
-/// reloads the existing keypair so the same identity is reused across runs.
-/// The file `root_lra.json` is the source of truth — if it disappears, a new
-/// Root LRA is generated and inserted (the old DB row, if any, becomes
-/// effectively orphaned — only the file-backed identity is reused).
-pub fn seed_root_lra(db_path: &str, en_url: &str) -> anyhow::Result<RootLra> {
-    if let Ok(existing) = IdentityFile::load(ROOT_LRA_FILE) {
+/// Seeds a notaire (role=notaire) into SQLite if none is recorded locally yet;
+/// otherwise reloads the existing identity so the same notaire is reused across
+/// runs. `bootstrap_notaire.json` is the source of truth.
+pub fn seed_bootstrap_notaire(db_path: &str, en_url: &str) -> anyhow::Result<BootstrapNotaire> {
+    if let Ok(existing) = IdentityFile::load(BOOTSTRAP_NOTAIRE_FILE) {
         let kp = existing.keypair()?;
-        return Ok(RootLra { keypair: kp, sn_hex: existing.sn_hex });
+        return Ok(BootstrapNotaire {
+            keypair: kp,
+            sn_hex: existing.sn_hex,
+            cert: existing.cert,
+        });
     }
 
     let kp = KeyPair::generate().map_err(|e| anyhow::anyhow!("KeyPair::generate: {e:?}"))?;
@@ -42,7 +46,7 @@ pub fn seed_root_lra(db_path: &str, en_url: &str) -> anyhow::Result<RootLra> {
         en_url: en_url.to_string(),
         validity_days: 365,
     };
-    let cert = create_self_signed_cert(&kp, "Root LRA", &challenge)
+    let cert = create_self_signed_cert(&kp, "Maître Dupont", &challenge)
         .map_err(|e| anyhow::anyhow!("create_self_signed_cert: {e:?}"))?;
 
     let sn_hex = hex::encode(sn.0);
@@ -61,20 +65,22 @@ pub fn seed_root_lra(db_path: &str, en_url: &str) -> anyhow::Result<RootLra> {
     let conn = rusqlite::Connection::open(db_path)
         .with_context(|| format!("failed to open SQLite DB at {db_path}"))?;
 
+    // lra_id sentinel mirrors the server's /enroll/notaire path; role=notaire is
+    // what lets this identity endorse clients and create actes.
     conn.execute(
         "INSERT OR IGNORE INTO identities \
-         (sn, si, pk, tbs_der, subject_id, lra_id, registered_at, revoked_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL)",
-        rusqlite::params![sn_hex, si_b64, pk_b64, tbs_der_b64, subject_id, sn_hex, now],
+         (sn, si, pk, tbs_der, subject_id, lra_id, registered_at, revoked_at, role) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, 'notaire')",
+        rusqlite::params![sn_hex, si_b64, pk_b64, tbs_der_b64, subject_id, "en:notaire-token", now],
     )
-    .context("INSERT root LRA into identities")?;
+    .context("INSERT bootstrap notaire into identities")?;
 
-    let identity = IdentityFile::from_keypair_and_cert("Root LRA", &kp, cert);
+    let identity = IdentityFile::from_keypair_and_cert("Maître Dupont", &kp, cert.clone());
     identity
-        .save(ROOT_LRA_FILE)
-        .with_context(|| format!("failed to persist {ROOT_LRA_FILE}"))?;
+        .save(BOOTSTRAP_NOTAIRE_FILE)
+        .with_context(|| format!("failed to persist {BOOTSTRAP_NOTAIRE_FILE}"))?;
 
-    Ok(RootLra { keypair: kp, sn_hex })
+    Ok(BootstrapNotaire { keypair: kp, sn_hex, cert })
 }
 
 /// Extrait le chemin du fichier SQLite depuis DATABASE_URL.

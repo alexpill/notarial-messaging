@@ -32,6 +32,7 @@ diesel::table! {
         lra_id -> Text,
         registered_at -> BigInt,
         revoked_at -> Nullable<BigInt>,
+        role -> Text,
     }
 }
 

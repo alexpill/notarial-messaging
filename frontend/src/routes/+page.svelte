@@ -6,7 +6,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { ed25519 } from '@noble/curves/ed25519.js';
 	import { generateKeypair, toBase64url, fromBase64url, toNumberArray } from '$lib/crypto/keys';
-	import { prepareTbs, enrollSelf, authChallenge, authVerify } from '$lib/api/client';
+	import { prepareTbs, enrollSelf, enrollNotaire, authChallenge, authVerify } from '$lib/api/client';
 	import { signAuthPop } from '$lib/crypto/auth';
 	import { identityStore, tokenStore, isAuthenticated } from '$lib/stores/identity';
 
@@ -21,9 +21,16 @@
 		'Obtention du session token',
 	];
 
+	// Dev convenience: prefill the notaire enrollment token and surface it in a
+	// "PoC" box. In prod the token is an operator secret printed in server logs,
+	// never shipped to the browser — so this box only shows in dev.
+	const isDev = import.meta.env.DEV;
+	const devNotaireToken = (import.meta.env.VITE_NOTAIRE_ENROLLMENT_TOKEN as string | undefined) ?? '';
+
 	let identity = $state($identityStore);
 	let authenticated = $state($isAuthenticated);
 	let notaireName = $state('');
+	let notaireToken = $state(devNotaireToken);
 	let clientName = $state('');
 	let enrollingRole = $state<Role | null>(null);
 	let enrollDone = $state(false);
@@ -72,7 +79,12 @@
 			setStep(2, 'done');
 
 			setStep(3, 'active');
-			const enrolled = await enrollSelf(certJson);
+			// Notaire: present the enrollment token (key stays in the browser).
+			// Client: one-click self-enroll (demo). Neither ships the private key.
+			const enrolled =
+				role === 'notaire'
+					? await enrollNotaire(certJson, notaireToken.trim())
+					: await enrollSelf(certJson);
 			setStep(3, 'done');
 
 			setStep(4, 'active');
@@ -342,20 +354,41 @@
 						Créer et gérer des actes, inviter des clients.
 					</Card.Description>
 				</Card.Header>
-				<Card.Content>
+				<Card.Content class="space-y-3">
 					<input
 						type="text"
 						bind:value={notaireName}
 						placeholder="Votre nom complet"
 						class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-						onkeydown={(e) => e.key === 'Enter' && startEnroll('notaire', notaireName)}
+						onkeydown={(e) =>
+							e.key === 'Enter' && notaireName.trim() && notaireToken.trim() && startEnroll('notaire', notaireName)}
 					/>
+					<input
+						type="text"
+						bind:value={notaireToken}
+						placeholder="Jeton d'enrôlement notaire"
+						class="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+						onkeydown={(e) =>
+							e.key === 'Enter' && notaireName.trim() && notaireToken.trim() && startEnroll('notaire', notaireName)}
+					/>
+					{#if isDev}
+						<div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 space-y-1">
+							<p class="font-semibold">PoC — jeton de démo (dev)</p>
+							<p>
+								Prérempli en développement. En production, l'EN génère ce jeton et le
+								remet à l'office comme <strong>secret opérateur</strong> (imprimé dans les
+								logs du serveur) — il n'est jamais envoyé au navigateur. Ta clé privée,
+								elle, ne quitte jamais cet onglet.
+							</p>
+							<p class="font-mono break-all">{devNotaireToken}</p>
+						</div>
+					{/if}
 				</Card.Content>
 				<Card.Footer>
 					<Button
 						class="w-full"
 						onclick={() => startEnroll('notaire', notaireName)}
-						disabled={!notaireName.trim()}
+						disabled={!notaireName.trim() || !notaireToken.trim()}
 					>
 						Entrer comme notaire
 					</Button>
@@ -424,9 +457,9 @@
 		<div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-xs text-amber-800 dark:text-amber-300 max-w-xl w-full space-y-1">
 			<p class="font-semibold">PoC — simplifications intentionnelles</p>
 			<ul class="list-disc list-inside space-y-0.5 text-amber-700 dark:text-amber-400">
-				<li>Le self-enroll ci-dessus est un <strong>raccourci démo</strong> : l'identité est auto-déclarée, sans vérification.</li>
-				<li>Flux réel : un notaire <strong>endosse</strong> la demande d'un client (Espace notaire → « Enrôler un client ») ; l'EN n'enregistre l'identité qu'avec cette caution signée.</li>
-				<li>Le serveur ne distingue pas encore « notaire » de « client » : en production, le rôle notaire serait une habilitation provisionnée côté EN (registre des identités).</li>
+				<li><strong>Rôle notaire</strong> : accordé en présentant le jeton d'enrôlement (l'EN désigne ses notaires). La clé privée reste dans le navigateur — seul le jeton transite.</li>
+				<li><strong>Self-enroll client</strong> : raccourci démo — inscription en un clic, rôle <em>client</em> uniquement (jamais notaire).</li>
+				<li>Flux de confiance : un notaire <strong>endosse</strong> un client (Espace notaire → « Enrôler un client ») ; le serveur n'accepte un endossement que d'un SN ayant le rôle notaire. Chaîne <strong>EN → notaire → client</strong>.</li>
 				<li>Identité non persistante : les clés vivent en sessionStorage et sont effacées à la fermeture de l'onglet.</li>
 			</ul>
 		</div>

@@ -7,7 +7,7 @@ use localpki_core::{
 use uuid::Uuid;
 
 use crate::{
-    bootstrap::{RootLra, db_path_from_url, seed_root_lra},
+    bootstrap::{db_path_from_url, seed_bootstrap_notaire},
     client::ApiClient,
     crypto::{decrypt_k_acte, decrypt_msg, encrypt_and_sign, make_lra_signature, sn_from_hex},
     identity::IdentityFile,
@@ -59,37 +59,6 @@ async fn enroll_actor(
     Ok(identity)
 }
 
-/// Enrolle un acteur via Root LRA (seed directe DB, puis API pour le reste).
-async fn enroll_from_root_lra(
-    client: &ApiClient,
-    name: &str,
-    root_lra: &RootLra,
-    server: &str,
-) -> anyhow::Result<IdentityFile> {
-    let kp = KeyPair::generate().map_err(|e| anyhow::anyhow!("KeyPair::generate: {e:?}"))?;
-    let sn_bytes: [u8; 16] = rand::random();
-    let sn = SerialNumber(sn_bytes);
-
-    let challenge = EnrollmentChallenge {
-        serial_number: sn,
-        en_url: server.to_string(),
-        validity_days: 365,
-    };
-    let cert = create_self_signed_cert(&kp, name, &challenge)
-        .map_err(|e| anyhow::anyhow!("create_self_signed_cert: {e:?}"))?;
-
-    let lra_sig_b64 = make_lra_signature(&root_lra.keypair.signing_key, &cert);
-    client.enroll(&cert, &root_lra.sn_hex, &lra_sig_b64).await?;
-
-    let session_token = client.authenticate(&kp.signing_key, &cert).await?;
-    let sn_hex = hex::encode(sn.0);
-
-    let mut identity = IdentityFile::from_keypair_and_cert(name, &kp, cert);
-    identity.sn_hex = sn_hex;
-    identity.session_token = Some(session_token);
-    Ok(identity)
-}
-
 pub async fn run(server: &str) -> anyhow::Result<()> {
     println!("\n{}", "═══════════════════════════════════════════════════════════".bold().yellow());
     println!("{}", "   DÉMO MESSAGERIE NOTARIALE LocalPKI".bold().yellow());
@@ -103,33 +72,32 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
 
     let client = ApiClient::new(server);
 
-    // ─── Étape 1 : Bootstrap Root LRA ───────────────────────────────────────
-    step(1, 8, "Bootstrap Root LRA (insertion directe DB)");
-    let root_lra = seed_root_lra(&db_path, server)?;
-    ok(&format!("Root LRA seedé — SN : {}", root_lra.sn_hex.dimmed()));
+    // ─── Étape 1 : Bootstrap notaire (seed DB role=notaire) ─────────────────
+    step(1, 7, "Bootstrap notaire « Maître Dupont » (seed DB direct, rôle notaire)");
+    let bootstrap = seed_bootstrap_notaire(&db_path, server)?;
+    ok(&format!("Notaire seedé par l'EN — SN : {}", bootstrap.sn_hex.dimmed()));
+    let mut notaire =
+        IdentityFile::from_keypair_and_cert("Maître Dupont", &bootstrap.keypair, bootstrap.cert.clone());
+    notaire.sn_hex = bootstrap.sn_hex.clone();
+    let notaire_session = client
+        .authenticate(&bootstrap.keypair.signing_key, &bootstrap.cert)
+        .await?;
+    notaire.session_token = Some(notaire_session.clone());
+    ok(&format!("Notaire authentifié — token : {}…", &notaire_session[..8].dimmed()));
 
-    // ─── Étape 2 : Enrollment Notaire ────────────────────────────────────────
-    step(2, 8, "Enrollment Notaire \"Maître Dupont\" (via Root LRA)");
-    let mut notaire = enroll_from_root_lra(&client, "Maître Dupont", &root_lra, server).await?;
-    ok(&format!("Notaire enregistré — SN : {}", notaire.sn_hex.dimmed()));
-    ok(&format!(
-        "Session token : {}…",
-        &notaire.session_token.as_deref().unwrap_or("")[..8].dimmed()
-    ));
-
-    // ─── Étape 3 : Enrollment Alice ──────────────────────────────────────────
-    step(3, 8, "Enrollment Alice Martin (via Notaire comme LRA)");
+    // ─── Étape 2 : Enrollment Alice ──────────────────────────────────────────
+    step(2, 7, "Enrollment Alice Martin (via Notaire comme LRA)");
     let notaire_as_lra = notaire.clone();
     let mut alice = enroll_actor(&client, "Alice Martin", &notaire_as_lra, server).await?;
     ok(&format!("Alice enregistrée  — SN : {}", alice.sn_hex.dimmed()));
 
-    // ─── Étape 4 : Enrollment Bob ────────────────────────────────────────────
-    step(4, 8, "Enrollment Bob Leroy (via Notaire comme LRA)");
+    // ─── Étape 3 : Enrollment Bob ────────────────────────────────────────────
+    step(3, 7, "Enrollment Bob Leroy (via Notaire comme LRA)");
     let mut bob = enroll_actor(&client, "Bob Leroy", &notaire_as_lra, server).await?;
     ok(&format!("Bob enregistré     — SN : {}", bob.sn_hex.dimmed()));
 
-    // ─── Étape 5 : Création de l'acte ───────────────────────────────────────
-    step(5, 8, "Création de l'acte « Vente 12 rue de la Paix, Paris 75001 »");
+    // ─── Étape 4 : Création de l'acte ───────────────────────────────────────
+    step(4, 7, "Création de l'acte « Vente 12 rue de la Paix, Paris 75001 »");
     let notaire_token = notaire.session_token.as_deref().unwrap();
     let acte = client
         .create_acte(
@@ -150,7 +118,7 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
     ));
 
     // ─── Étape 6 : Échange de messages ──────────────────────────────────────
-    step(6, 8, "Échange de messages chiffrés");
+    step(5, 7, "Échange de messages chiffrés");
 
     // Alice récupère K_acte et envoie le premier message.
     let alice_token = alice.session_token.as_deref().unwrap();
@@ -193,7 +161,7 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
     ));
 
     // ─── Étape 7 : Lecture et déchiffrement ─────────────────────────────────
-    step(7, 8, "Lecture et déchiffrement des messages");
+    step(6, 7, "Lecture et déchiffrement des messages");
 
     // Notaire récupère K_acte et lit tous les messages.
     let notaire_c_acte = client.get_acte_key(notaire_token, &acte_id).await?;
@@ -220,7 +188,7 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
     }
 
     // ─── Étape 8 : Merkle Log ────────────────────────────────────────────────
-    step(8, 8, "Vérification du Merkle Log de transparence");
+    step(7, 7, "Vérification du Merkle Log de transparence");
     let merkle = client.get_merkle(notaire_token, &acte_id).await?;
     let root = merkle["root"].as_str().unwrap_or("(vide)");
     let count = merkle["leaves_count"].as_u64().unwrap_or(0);

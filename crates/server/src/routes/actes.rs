@@ -66,6 +66,16 @@ pub async fn create_acte(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreateActeRequest>,
 ) -> Result<(StatusCode, Json<ActeResponse>), AppError> {
+    // Only a notaire may open a dossier — the role is anchored in the EN registry.
+    let caller = registry::lookup_identity(&state.db, notaire_sn.clone())
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+    if caller.role != crate::routes::enrollment::ROLE_NOTAIRE {
+        return Err(AppError::Forbidden(
+            "only a notaire may create an acte".into(),
+        ));
+    }
+
     // Deduplicate: notaire is always a participant too.
     let mut all_sns: Vec<String> = req.parties.clone();
     if !all_sns.contains(&notaire_sn) {

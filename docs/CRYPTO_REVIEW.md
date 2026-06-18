@@ -45,9 +45,12 @@ tout cela est correctement implémenté et l'interopérabilité Rust↔JS corres
 
 Les faiblesses ouvertes se concentrent ailleurs :
 
-1. **Couche identité / session** : le login prouve désormais la possession de `sk`
-   via challenge-response (A1 ✅ résolu le 2026-06-17). Reste ouvert : le chemin
-   d'enrôlement par défaut auto-déclare les identités sans ancre de confiance (A2).
+1. **Couche identité / session** : le login prouve la possession de `sk` via
+   challenge-response (A1 ✅ résolu). L'ancre de confiance est désormais imposée :
+   attribut `role` côté EN, jeton d'enrôlement notaire, gates `role==notaire` sur
+   `/enroll` et `/actes` (A2 + A3 ✅ résolus le 2026-06-17 ; « Root LRA » supprimé).
+   Reste ouvert côté frontend : pas de flux « se reconnecter » (sessionStorage), et
+   les redirections mortes `/login` (cf. §B).
 2. **Décalage doc↔code** *(✅ résolu le 2026-06-17)* : plusieurs affirmations des
    documents (SI = `SHA256(DER)`, « rcgen pour la génération, x509-cert pour le
    parsing ») ne correspondaient pas au code — désormais réconciliées (cf. A4 et §B).
@@ -124,7 +127,15 @@ token. Petit changement, ferme le finding.
 
 ### A2 — `enroll_self` court-circuite l'ancre de confiance LocalPKI
 
-🔴 **Sévérité : critique (architecturale)**
+✅ **RÉSOLU (2026-06-17)** — un attribut `role ∈ {notaire, client}` a été ajouté
+au registre EN (`identities.role`). `enroll_self` enregistre désormais **toujours**
+`role = client` — il ne peut plus produire de notaire. Le rôle `notaire` n'est
+accordé que par `POST /enroll/notaire` sur présentation du **jeton d'enrôlement
+notaire** (l'EN désigne ses notaires, §2.1 du papier ; la clé privée ne transite
+pas, seul le jeton circule). La notion « Root LRA » a été supprimée. Finding
+initial conservé ci-dessous pour traçabilité ; voir A3 pour les gates.
+
+🔴 **Sévérité (historique) : critique (architecturale)**
 
 La page d'accueil auto-enrôle **les deux** rôles : `frontend/src/routes/+page.svelte:69`
 appelle `enrollSelf()` → `POST /enroll/self`
@@ -169,7 +180,17 @@ confiance *fonctionner*, pas être simulé.
 
 ### A3 — Graphe de confiance plat
 
-🟠 **Sévérité : architecturale (renforce A2)**
+✅ **RÉSOLU (2026-06-17)** — le graphe n'est plus plat. Deux gates ancrent la
+hiérarchie EN → notaire → client sur l'attribut `identities.role` :
+- `POST /enroll` (`enrollment.rs`) rejette tout endosseur dont `role != notaire`
+  (403 Forbidden) — un client ne peut plus endosser.
+- `POST /actes` (`actes.rs`) rejette la création d'acte si le créateur n'a pas
+  `role == notaire` (403).
+Couvert par les tests `test_client_cannot_endorse`, `test_client_cannot_create_acte`,
+`test_enroll_notaire_bad_token_rejected`, `test_notaire_token_grants_acte_creation`.
+Finding initial conservé ci-dessous pour traçabilité.
+
+🟠 **Sévérité (historique) : architecturale (renforce A2)**
 
 `enroll` (`enrollment.rs:47-48`) : « any enrolled and non-revoked identity can act
 as LRA ». `create_acte` (`crates/server/src/routes/actes.rs:64`) : n'importe quel
@@ -281,12 +302,16 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
   rebondit vers `/`). Tout deep-link non authentifié fait un 404. Aucun flux
   « se connecter avec une identité existante » n'existe (sessionStorage uniquement,
   §10.1).
-- **`root_lra_signing_key` est de l'état mort** — stocké dans `AppState`
-  (`crates/server/src/state.rs:25`) et seedé, jamais lu par aucune route.
-  `enroll_self` ne l'utilise pas (insère avec `lra_id = root_lra_sn`). Vestigial.
-- **`seed_root_lra` insère une ligne Root LRA à chaque démarrage**
-  (`crates/server/src/en/registry.rs:217-219`, commentaire à l'appui) — chaque
-  redémarrage accumule une identité LRA aux pleins pouvoirs. Rendre idempotent.
+- **✅ RÉSOLU (2026-06-17) — `root_lra_signing_key` (état mort) supprimé** de
+  `AppState`, ainsi que `root_lra_sn`. *Finding initial :* la clé était seedée et
+  stockée mais jamais lue (le compilateur le confirmait : *field never read*).
+- **✅ RÉSOLU (2026-06-17) — `seed_root_lra` supprimée côté serveur.** *Finding
+  initial :* elle insérait une ligne « Root LRA » aux pleins pouvoirs à **chaque**
+  démarrage (non-idempotent — le commit `05bed03` ne corrigeait que la version
+  *demo-cli*, pas celle du serveur). La notion « Root LRA » est entièrement
+  retirée ; le serveur ne seede plus aucune identité. L'amorçage du premier
+  notaire passe par le jeton (`/enroll/notaire`) ou le seed direct du `demo-cli`
+  (`bootstrap_notaire.json`, idempotent via fichier + `INSERT OR IGNORE`).
 - **✅ RÉSOLU (2026-06-17) — `rcgen` retiré + docs corrigées vers x509-cert.**
   *Finding initial :* `rcgen` était une dépendance inutilisée
   (`crates/localpki-core/Cargo.toml`). Les docs disaient « rcgen pour la génération,
@@ -439,10 +464,10 @@ dans la couche **identité / authentification / bootstrap de confiance** et dans
 | Ordre | Effort | Action |
 |---|---|---|
 | 1 | ✅ fait | **A1** — challenge-response au login (`/auth/challenge` + PoP signée vérifiée dans `/auth/verify`) ; test anti-rejeu `test_auth_challenge_is_single_use` |
-| 2 | ~30 min | **A2** — faire du flux notaire-endosse le défaut, ou gater `/enroll/self` derrière un flag de build |
+| 2 | ✅ fait | **A2 + A3** — attribut `role` côté EN ; jeton d'enrôlement notaire (`/enroll/notaire`) ; gates `role==notaire` sur `/enroll` et `/actes` ; suppression de « Root LRA » |
 | 3 | ✅ fait | **A4 + B (docs)** — doc SI alignée sur `Sign(sk, tbs_der)` ; rcgen retiré ; docs → x509-cert |
 | 4 | ~15 min | **A5** — tags de domaine sur les signatures utilisateur (`localpki-msg-v1`, `localpki-participant-v1`) |
-| 5 | ~10 min | **B** — `/login` → `/auth` dans les 4 gardes ; retirer `root_lra_signing_key` mort ; rendre `seed_root_lra` idempotent |
+| 5 | partiel | **B** — ✅ `root_lra_signing_key` mort retiré + `seed_root_lra` serveur supprimée (A2/A3) ; reste ouvert : `/login` → `/auth` dans les 4 gardes frontend |
 | 6 | ~10 min | **A8** — ne pas afficher le contenu `sigValid === false` sans quarantaine visuelle |
 | 7 | ~10 min | **A6 + C5** — `was_contributory()` sur ECIES ; homogénéiser sur `OsRng` |
 | 8 | ~5 min | **A7** — documenter l'hypothèse d'unicité de nonce sous `K_send` longue durée (§8) |

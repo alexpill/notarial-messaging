@@ -26,10 +26,6 @@ pub struct AppState {
     /// signature over `tag || SN || nonce` with the registry pk. Same in-memory,
     /// single-process model as `ws_tickets`.
     pub auth_challenges: Mutex<HashMap<String, i64>>,
-    /// Root LRA keypair — seeded at startup, used by POST /enroll/self so the
-    /// frontend can complete enrollment in one shot without a separate notaire session.
-    pub root_lra_signing_key: Mutex<ed25519_dalek::SigningKey>,
-    pub root_lra_sn: String,
 }
 
 #[derive(Debug, Clone)]
@@ -43,8 +39,6 @@ impl AppState {
         db: DbPool,
         hsm: HsmSimulator,
         config: AppConfig,
-        root_lra_signing_key: ed25519_dalek::SigningKey,
-        root_lra_sn: String,
     ) -> Result<Self, AppError> {
         let (signing_key, verifying_key) = load_en_keys(&config)?;
         Ok(Self {
@@ -56,8 +50,6 @@ impl AppState {
             ws_channels: Mutex::new(HashMap::new()),
             ws_tickets: Mutex::new(HashMap::new()),
             auth_challenges: Mutex::new(HashMap::new()),
-            root_lra_signing_key: Mutex::new(root_lra_signing_key),
-            root_lra_sn,
         })
     }
 
@@ -66,12 +58,12 @@ impl AppState {
     pub fn new_for_test(db: DbPool, hsm: HsmSimulator) -> Self {
         let signing_key = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
         let verifying_key = signing_key.verifying_key();
-        let root_lra_sk = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng);
         let config = AppConfig {
             database_url: String::new(),
             server_host: "127.0.0.1".to_string(),
             server_port: 3000,
             frontend_origin: "http://localhost:5173".to_string(),
+            notaire_enrollment_token: "test-notaire-token".to_string(),
         };
         Self {
             db,
@@ -82,8 +74,6 @@ impl AppState {
             ws_channels: Mutex::new(HashMap::new()),
             ws_tickets: Mutex::new(HashMap::new()),
             auth_challenges: Mutex::new(HashMap::new()),
-            root_lra_signing_key: Mutex::new(root_lra_sk),
-            root_lra_sn: "test-root-lra".to_string(),
         }
     }
 }

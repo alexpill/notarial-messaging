@@ -105,6 +105,15 @@ export async function enrollSelf(certJson: unknown): Promise<EnrollResponse> {
 	return request('POST', '/enroll/self', { cert: certJson });
 }
 
+/**
+ * Enroll as a notaire by presenting the EN's notaire enrollment token. The
+ * private key never leaves the browser — only the token transits. On success
+ * the server records the identity with role=notaire.
+ */
+export async function enrollNotaire(certJson: unknown, token: string): Promise<EnrollResponse> {
+	return request('POST', '/enroll/notaire', { cert: certJson, token });
+}
+
 export async function getIdentity(
 	sn: string
 ): Promise<{ sn: string; pk: string; display_name: string | null; registered_at: number }> {

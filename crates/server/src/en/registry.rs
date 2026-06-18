@@ -8,7 +8,6 @@ use crate::{
     },
     error::AppError,
 };
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use diesel::prelude::*;
 
 // ─── identities ──────────────────────────────────────────────────────────────
@@ -21,6 +20,7 @@ pub async fn insert_identity(pool: &DbPool, entry: NewIdentity<'_>) -> Result<()
     let tbs_der    = entry.tbs_der.to_owned();
     let subject_id = entry.subject_id.to_owned();
     let lra_id     = entry.lra_id.to_owned();
+    let role       = entry.role.to_owned();
     let registered_at = entry.registered_at;
 
     run_db(pool, move |conn| {
@@ -35,6 +35,7 @@ pub async fn insert_identity(pool: &DbPool, entry: NewIdentity<'_>) -> Result<()
                 lra_id: &lra_id,
                 registered_at,
                 revoked_at: None,
+                role: &role,
             })
             .execute(conn)?;
         Ok(())
@@ -210,59 +211,4 @@ pub async fn get_participant_entry(
             .optional()
     })
     .await
-}
-
-/// Seeds a Root LRA in the DB at startup. Returns the keypair and its SN hex.
-/// Each call inserts a fresh row with a new random SN — calling this multiple times
-/// (e.g. on each restart) accumulates harmless LRA rows in the identities table.
-/// The returned keypair is stored in AppState for the lifetime of the process.
-pub async fn seed_root_lra(
-    pool: &DbPool,
-    en_url: &str,
-) -> Result<(localpki_core::crypto::KeyPair, String), AppError> {
-    let kp = localpki_core::crypto::KeyPair::generate()
-        .map_err(|_| AppError::Config("root LRA key generation failed".into()))?;
-
-    let sn_bytes: [u8; 16] = rand::random();
-    let sn = localpki_core::cert::SerialNumber(sn_bytes);
-
-    let challenge = localpki_core::enrollment::EnrollmentChallenge {
-        serial_number: sn,
-        en_url: en_url.to_string(),
-        validity_days: 3650,
-    };
-    let cert = localpki_core::enrollment::create_self_signed_cert(&kp, "Root LRA", &challenge)
-        .map_err(|_| AppError::Config("root LRA cert creation failed".into()))?;
-
-    let sn_hex = hex::encode(sn.0);
-    let si_b64 = URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes());
-    let pk_b64 = URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes());
-    let tbs_der_b64 = URL_SAFE_NO_PAD.encode(
-        cert.tbs
-            .to_der()
-            .map_err(|e| AppError::Database(format!("tbs DER encoding: {e}")))?,
-    );
-    let subject_id = cert.tbs.subject_id.clone();
-    let now = crate::utils::unix_now()?;
-    let sn_hex_db = sn_hex.clone();
-
-    run_db(pool, move |conn| {
-        use crate::db::schema::identities;
-        diesel::insert_into(identities::table)
-            .values(NewIdentity {
-                sn: &sn_hex_db,
-                si: &si_b64,
-                pk: &pk_b64,
-                tbs_der: &tbs_der_b64,
-                subject_id: &subject_id,
-                lra_id: &sn_hex_db,
-                registered_at: now,
-                revoked_at: None,
-            })
-            .execute(conn)?;
-        Ok(())
-    })
-    .await?;
-
-    Ok((kp, sn_hex))
 }

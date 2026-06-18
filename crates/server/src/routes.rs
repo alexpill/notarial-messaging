@@ -25,6 +25,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/enroll", post(enrollment::enroll))
         .route("/enroll/prepare", post(enrollment::prepare_tbs))
         .route("/enroll/self", post(enrollment::enroll_self))
+        .route("/enroll/notaire", post(enrollment::enroll_notaire))
         .route("/auth/challenge", post(authentication::challenge))
         .route("/auth/verify", post(authentication::verify))
         .route("/revoke", post(revocation::revoke))

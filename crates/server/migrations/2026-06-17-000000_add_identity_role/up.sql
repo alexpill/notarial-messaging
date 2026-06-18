@@ -1,0 +1,14 @@
+-- Add a `role` attribute to the EN identity registry.
+--
+-- The role anchors the LocalPKI trust hierarchy EN → notaire → client:
+--   * only a `notaire` may endorse a client enrollment (POST /enroll)
+--   * only a `notaire` may create an acte (POST /actes)
+--
+-- Per the paper (§2.1: "the LRA is registered by some EN"), the right place for
+-- this is the EN registry, NOT the self-signed TBSCert (which would be
+-- self-declared and worthless). The role is set by a trusted process — the
+-- notaire enrollment token, or an operator — never by the client.
+--
+-- Defaults to 'client' so existing rows and self-enrolled users are
+-- unprivileged by construction.
+ALTER TABLE identities ADD COLUMN role TEXT NOT NULL DEFAULT 'client';

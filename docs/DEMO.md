@@ -28,12 +28,18 @@ simplifications du PoC.
 
 ## 1. Enrôler un notaire
 
-Carte **« Je suis notaire »** → saisis un nom → **« Entrer comme notaire »**.
+Carte **« Je suis notaire »** → saisis un nom. Un champ **« Jeton d'enrôlement
+notaire »** est **prérempli en dev** (encart « PoC — jeton de démo ») : c'est
+l'autorité de l'EN qui désigne ses notaires. → **« Entrer comme notaire »**.
 
-L'application génère la paire de clés, construit le certificat auto-signé et
-enregistre l'identité — chaque étape est affichée :
+L'application génère la paire de clés **dans le navigateur** (la clé privée ne
+transite jamais — seul le jeton est envoyé), construit le certificat auto-signé,
+et le serveur enregistre l'identité avec le rôle `notaire` :
 
 <img src="images/02-notaire-enrole.png" alt="Enrôlement notaire" width="500" />
+
+> Les captures de l'enrôlement notaire peuvent précéder l'ajout du champ
+> « jeton » ; le déroulé des étapes reste identique.
 
 Tu arrives dans l'espace notaire (vide au départ) :
 
@@ -139,9 +145,13 @@ scelle l'ordre et l'intégrité des messages :
 
 ## Bon à savoir (limites assumées du PoC)
 
-- **Mode démo vs flux réel** : le self-enrôlement (switch activé) est un raccourci
-  pour tester sans friction ; le flux endossé (switch désactivé + `/notaire/enroller`)
-  est le vrai parcours de confiance. Détails dans `ARCHITECTURE.md` §10.1.
+- **Modèle de confiance EN → notaire → client** : le rôle `notaire` s'obtient en
+  présentant le **jeton d'enrôlement** (l'EN désigne ses notaires) — un client ne
+  peut **jamais** se déclarer notaire. Le self-enrôlement client (switch activé)
+  reste un raccourci démo (rôle `client`) ; le flux endossé (switch désactivé +
+  `/notaire/enroller`) est le parcours de confiance. Côté serveur, seul un
+  `role=notaire` peut endosser un client ou créer un acte. Détails dans
+  `ARCHITECTURE.md` §10.1.
 - **Identité non persistante** : fermer l'onglet efface l'identité (clés en
   `sessionStorage`). Il n'y a pas de « se reconnecter plus tard comme Alice » —
   garde l'onglet ouvert le temps de la démo.
