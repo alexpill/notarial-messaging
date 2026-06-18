@@ -24,32 +24,37 @@ pub struct BootstrapNotaire {
 /// notaire and leave the previous ones as orphaned rows in `identities`.
 const BOOTSTRAP_NOTAIRE_FILE: &str = "bootstrap_notaire.json";
 
-/// Seeds a notaire (role=notaire) into SQLite if none is recorded locally yet;
-/// otherwise reloads the existing identity so the same notaire is reused across
-/// runs. `bootstrap_notaire.json` is the source of truth.
+/// Seeds a notaire (role=notaire) into SQLite. Reuses the identity cached in
+/// `bootstrap_notaire.json` across runs when present, and always (re)inserts the
+/// row into `identities` via `INSERT OR IGNORE`. The DB insert runs on every
+/// path so a wiped/recreated database stays in sync with the cached JSON —
+/// otherwise the notaire would exist in the JSON but be missing server-side,
+/// and `POST /auth/verify` would 404.
 pub fn seed_bootstrap_notaire(db_path: &str, en_url: &str) -> anyhow::Result<BootstrapNotaire> {
-    if let Ok(existing) = IdentityFile::load(BOOTSTRAP_NOTAIRE_FILE) {
+    let (kp, sn_hex, cert) = if let Ok(existing) = IdentityFile::load(BOOTSTRAP_NOTAIRE_FILE) {
         let kp = existing.keypair()?;
-        return Ok(BootstrapNotaire {
-            keypair: kp,
-            sn_hex: existing.sn_hex,
-            cert: existing.cert,
-        });
-    }
+        (kp, existing.sn_hex, existing.cert)
+    } else {
+        let kp = KeyPair::generate().map_err(|e| anyhow::anyhow!("KeyPair::generate: {e:?}"))?;
+        let sn_bytes: [u8; 16] = rand::random();
+        let sn = SerialNumber(sn_bytes);
 
-    let kp = KeyPair::generate().map_err(|e| anyhow::anyhow!("KeyPair::generate: {e:?}"))?;
-    let sn_bytes: [u8; 16] = rand::random();
-    let sn = SerialNumber(sn_bytes);
+        let challenge = EnrollmentChallenge {
+            serial_number: sn,
+            en_url: en_url.to_string(),
+            validity_days: 365,
+        };
+        let cert = create_self_signed_cert(&kp, "Maître Dupont", &challenge)
+            .map_err(|e| anyhow::anyhow!("create_self_signed_cert: {e:?}"))?;
 
-    let challenge = EnrollmentChallenge {
-        serial_number: sn,
-        en_url: en_url.to_string(),
-        validity_days: 365,
+        let identity = IdentityFile::from_keypair_and_cert("Maître Dupont", &kp, cert.clone());
+        identity
+            .save(BOOTSTRAP_NOTAIRE_FILE)
+            .with_context(|| format!("failed to persist {BOOTSTRAP_NOTAIRE_FILE}"))?;
+
+        (kp, hex::encode(sn.0), cert)
     };
-    let cert = create_self_signed_cert(&kp, "Maître Dupont", &challenge)
-        .map_err(|e| anyhow::anyhow!("create_self_signed_cert: {e:?}"))?;
 
-    let sn_hex = hex::encode(sn.0);
     let si_b64 = URL_SAFE_NO_PAD.encode(cert.signature_id.0.to_bytes());
     let pk_b64 = URL_SAFE_NO_PAD.encode(cert.tbs.public_key.as_bytes());
     let tbs_der_b64 = URL_SAFE_NO_PAD.encode(
@@ -66,7 +71,9 @@ pub fn seed_bootstrap_notaire(db_path: &str, en_url: &str) -> anyhow::Result<Boo
         .with_context(|| format!("failed to open SQLite DB at {db_path}"))?;
 
     // lra_id sentinel mirrors the server's /enroll/notaire path; role=notaire is
-    // what lets this identity endorse clients and create actes.
+    // what lets this identity endorse clients and create actes. INSERT OR IGNORE
+    // makes this idempotent: a no-op when the row already exists, a re-seed when
+    // the DB was reset out from under the cached JSON.
     conn.execute(
         "INSERT OR IGNORE INTO identities \
          (sn, si, pk, tbs_der, subject_id, lra_id, registered_at, revoked_at, role) \
@@ -74,11 +81,6 @@ pub fn seed_bootstrap_notaire(db_path: &str, en_url: &str) -> anyhow::Result<Boo
         rusqlite::params![sn_hex, si_b64, pk_b64, tbs_der_b64, subject_id, "en:notaire-token", now],
     )
     .context("INSERT bootstrap notaire into identities")?;
-
-    let identity = IdentityFile::from_keypair_and_cert("Maître Dupont", &kp, cert.clone());
-    identity
-        .save(BOOTSTRAP_NOTAIRE_FILE)
-        .with_context(|| format!("failed to persist {BOOTSTRAP_NOTAIRE_FILE}"))?;
 
     Ok(BootstrapNotaire { keypair: kp, sn_hex, cert })
 }
