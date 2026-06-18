@@ -278,7 +278,7 @@
 				<Card.Root class="hover:shadow-md transition-shadow">
 					<Card.Header>
 						<Card.Title>Espace notaire</Card.Title>
-						<Card.Description>Gérez vos dossiers et suivez les actes.</Card.Description>
+						<Card.Description>Gérez vos actes et suivez leur avancement.</Card.Description>
 					</Card.Header>
 					<Card.Footer class="flex flex-col gap-2">
 						<Button class="w-full" href="/notaire/actes">Mes actes</Button>
@@ -292,10 +292,10 @@
 				<Card.Root class="hover:shadow-md transition-shadow">
 					<Card.Header>
 						<Card.Title>Espace client</Card.Title>
-						<Card.Description>Consultez vos dossiers et échangez avec votre notaire.</Card.Description>
+						<Card.Description>Consultez vos actes et échangez avec votre notaire.</Card.Description>
 					</Card.Header>
 					<Card.Footer>
-						<Button class="w-full" href="/actes">Mes dossiers</Button>
+						<Button class="w-full" href="/actes">Mes actes</Button>
 					</Card.Footer>
 				</Card.Root>
 			{/if}
@@ -400,7 +400,7 @@
 				<Card.Header>
 					<Card.Title>Je suis client</Card.Title>
 					<Card.Description>
-						Consulter mes dossiers, échanger avec mon notaire.
+						Consulter mes actes, échanger avec mon notaire.
 					</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">

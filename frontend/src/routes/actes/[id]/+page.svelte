@@ -334,14 +334,14 @@
 			<div>
 				<h1 class="font-semibold text-sm">{acte?.titre ?? 'Chargement…'}</h1>
 				{#if acte}
-					<p class="text-xs text-muted-foreground">{acte.parties.length} participants</p>
+					<p class="text-xs text-muted-foreground">{acte.parties.length} parties</p>
 				{/if}
 			</div>
 		</div>
 		<div class="flex gap-1">
 			{#if isNotaire()}
 				<Button variant="ghost" onclick={() => { showAddParticipant = !showAddParticipant; addParticipantError = ''; }} class="text-xs">
-					+ Participant
+					+ Partie
 				</Button>
 			{/if}
 			<Button variant="ghost" onclick={fetchMerkle} class="text-xs">Merkle</Button>
@@ -359,12 +359,12 @@
 	<!-- Add participant panel (notaire only) -->
 	{#if showAddParticipant}
 		<div class="border-b bg-muted/50 px-4 py-3 space-y-2">
-			<p class="text-xs font-medium">Ajouter un participant</p>
+			<p class="text-xs font-medium">Ajouter une partie</p>
 			<div class="flex gap-2">
 				<input
 					type="text"
 					bind:value={newParticipantSn}
-					placeholder="SN hex du participant (32 chars)"
+					placeholder="SN hex de la partie (32 chars)"
 					disabled={addingParticipant}
 					onkeydown={(e) => e.key === 'Enter' && doAddParticipant()}
 					class="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"

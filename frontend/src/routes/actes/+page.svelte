@@ -54,7 +54,7 @@
 <div class="min-h-screen bg-background p-6 max-w-4xl mx-auto">
 	<div class="flex items-center justify-between mb-8">
 		<div>
-			<h1 class="text-2xl font-bold">Mes dossiers</h1>
+			<h1 class="text-2xl font-bold">Mes actes</h1>
 			{#if identity}
 				<p class="text-sm text-muted-foreground mt-1">{identity.name}</p>
 			{/if}
@@ -67,13 +67,13 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-muted-foreground">Chargement des dossiers…</p>
+		<p class="text-sm text-muted-foreground">Chargement des actes…</p>
 	{:else if actes.length === 0}
 		<Card.Root class="text-center py-12">
 			<Card.Content>
-				<p class="text-muted-foreground">Aucun dossier en cours.</p>
+				<p class="text-muted-foreground">Aucun acte en cours.</p>
 				<p class="text-sm text-muted-foreground mt-2">
-					Votre notaire vous ajoutera à un dossier pour commencer les échanges.
+					Votre notaire vous ajoutera à un acte pour commencer les échanges.
 				</p>
 			</Card.Content>
 		</Card.Root>
