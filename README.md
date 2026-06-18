@@ -5,6 +5,10 @@ paradigme **LocalPKI** (Dumas, Lafourcade, Melemedjian, Orfila, Thoniel, 2019).
 
 Réalisé dans le cadre du sujet **S001 — Astéroïde 2026**.
 
+> **Processus de travail** — Les choix de conception, l'analyse des protocoles
+> existants, l'utilisation de l'IA et la méthode d'implémentation sont détaillés
+> dans [`docs/METHODOLOGIE.md`](docs/METHODOLOGIE.md).
+
 ---
 
 ## Contexte
