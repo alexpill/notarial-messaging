@@ -1,7 +1,8 @@
 # Rust
 target/
-Cargo.lock
 *.pdb
+# Cargo.lock is committed on purpose: this workspace ships binaries
+# (server, demo-cli), and reproducible builds want a pinned lockfile.
 
 # SQLite
 *.db
@@ -16,10 +17,18 @@ Cargo.lock
 # SvelteKit / Node
 frontend/node_modules/
 frontend/.svelte-kit/
+frontend/.vite/
 frontend/build/
 frontend/dist/
 frontend/.env
 frontend/.env.*
+
+# Demo identity files written by demo-cli — contain PRIVATE KEYS in cleartext.
+# Regenerable via `cargo run -p demo-cli -- scenario`. Never commit them.
+/*.json
+
+# Editor backups
+*.bak
 
 # OS
 .DS_Store
