@@ -179,8 +179,7 @@ conversation :
 - **Une identité par onglet** : utilisez des onglets séparés pour incarner
   plusieurs personnes en parallèle.
 
-Toutes les limites sont documentées et justifiées dans [`ARCHITECTURE.md` §10](ARCHITECTURE.md#10-limites-assumées-et-perspectives) et
-[`CRYPTO_REVIEW.md`](CRYPTO_REVIEW.md).
+Toutes les limites sont documentées et justifiées dans [`ARCHITECTURE.md` §10](ARCHITECTURE.md#10-limites-assumées-et-perspectives).
 
 ---
 

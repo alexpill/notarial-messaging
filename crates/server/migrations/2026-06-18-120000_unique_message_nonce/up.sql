@@ -4,5 +4,5 @@
 -- nonce under the same key is catastrophic for GCM (cf. ARCHITECTURE.md §8.5).
 -- As a direct side effect, this rejects byte-for-byte message replay: an
 -- identical re-POST reuses the nonce and is refused (409) instead of producing a
--- duplicate leaf in the transparency log (cf. CRYPTO_REVIEW.md §B).
+-- duplicate leaf in the transparency log.
 CREATE UNIQUE INDEX messages_acte_sender_nonce ON messages(acte_uuid, sender_sn, nonce);

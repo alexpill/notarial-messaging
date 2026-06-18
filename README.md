@@ -64,7 +64,6 @@ Pour la structure du code, voir l'arborescence des crates ci-dessus et les `lib.
 - [`docs/METHODOLOGIE.md`](docs/METHODOLOGIE.md) — à lire en premier : démarche, choix de conception, raisonnement et usage de l'IA (document court).
 - [`docs/DEMO.md`](docs/DEMO.md) — visite illustrée pas-à-pas (enrôlement → messagerie → Merkle).
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — document de référence : protocoles LocalPKI, hiérarchie de clés, choix cryptographiques et limites assumées (dense, navigable par section).
-- [`docs/CRYPTO_REVIEW.md`](docs/CRYPTO_REVIEW.md) — auto-audit de sécurité (findings, conformité, résolution).
 
 ---
 
