@@ -299,9 +299,9 @@ async fn test_enroll_duplicate_sn_rejected() {
     let (s1, _) = app.post_json("/enroll", &body).await;
     assert_eq!(s1, StatusCode::CREATED);
 
-    // Second enrollment with the same cert (same SN) must be rejected
+    // Second enrollment with the same cert (same SN) must be rejected with 409.
     let (s2, _) = app.post_json("/enroll", &body).await;
-    assert_eq!(s2, StatusCode::INTERNAL_SERVER_ERROR); // unique constraint → DB error
+    assert_eq!(s2, StatusCode::CONFLICT); // duplicate SN → unique violation → 409 Conflict
 }
 
 // ─── Tests — authentication ───────────────────────────────────────────────────
@@ -626,6 +626,54 @@ async fn test_non_participant_cannot_send_message() {
         )
         .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_message_replay_is_rejected() {
+    // A byte-for-byte re-POST of an already-logged message must be rejected: the
+    // (acte_uuid, sender_sn, nonce) uniqueness closes replay and enforces the
+    // AES-GCM nonce-uniqueness invariant (ARCHITECTURE.md §8.5).
+    let app = TestApp::new().await;
+    let (_kp, _sn_n, cert_notaire) = app.enroll_notaire("Notaire").await;
+    let (kp_alice, sn_alice, cert_alice) = app.enroll_user("Alice").await;
+    let token_notaire = app.authenticate(&cert_notaire).await;
+    let token_alice = app.authenticate(&cert_alice).await;
+
+    let (_, acte) = app
+        .post_json_authed(
+            "/actes",
+            &token_notaire,
+            &json!({ "titre": "Replay", "parties": [sn_alice] }),
+        )
+        .await;
+    let acte_id = acte["uuid"].as_str().unwrap().to_owned();
+
+    let now = now_ts();
+    let (c_msg, nonce, sig) =
+        signed_message_body(7, &kp_alice.signing_key, &sn_alice, &acte_id, now);
+    let body = json!({ "c_message": c_msg, "nonce": nonce, "signature": sig, "timestamp": now });
+
+    // First send succeeds.
+    let (s1, _) = app
+        .post_json_authed(&format!("/actes/{acte_id}/messages"), &token_alice, &body)
+        .await;
+    assert_eq!(s1, StatusCode::OK);
+
+    // Exact replay (same nonce) is rejected with 409 — no second leaf is created.
+    let (s2, _) = app
+        .post_json_authed(&format!("/actes/{acte_id}/messages"), &token_alice, &body)
+        .await;
+    assert_eq!(s2, StatusCode::CONFLICT, "byte-for-byte replay must be rejected");
+
+    // The log still holds exactly one message.
+    let (_, list) = app
+        .get_authed(&format!("/actes/{acte_id}/messages"), &token_alice)
+        .await;
+    assert_eq!(
+        list.as_array().unwrap().len(),
+        1,
+        "replay must not add a second message"
+    );
 }
 
 // ─── Tests — merkle log ───────────────────────────────────────────────────────

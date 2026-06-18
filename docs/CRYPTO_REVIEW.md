@@ -26,8 +26,8 @@
 > - **`/login` mort ✅** — les 4 gardes frontend redirigent vers `/`.
 > - **Self-enroll ✅ (gaté)** — `POST /enroll/self` est désactivé par défaut
 >   (`ALLOW_SELF_ENROLL`), si bien qu'une config « production-like » impose le flux
->   endossé. Reste ouvert : la *dédup de message* (replay octet-pour-octet) et la
->   *persistance d'identité* frontend.
+>   endossé. **Dédup de message ✅** (index unique `(acte_uuid, sender_sn, nonce)`,
+>   2026-06-18). Reste ouvert : la *persistance d'identité* frontend.
 
 ---
 
@@ -355,11 +355,12 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
   validée au boot dans `AppConfig::from_env`). Il ne reste **aucun** `.unwrap()` en
   production ; les seuls `.expect()` restants sont les invariants HKDF (sortie 32 o,
   réellement infaillibles, documentés).
-- **Pas de dédup de message / unicité de nonce** — un expéditeur peut re-POST son
-  propre `{c_message, nonce, signature, timestamp}` identique dans la fenêtre de
-  300s et obtenir un second `seq`/leaf. Signature valide → le log montre le « même »
-  message deux fois. Un log de transparence notarial ne devrait sans doute pas
-  accepter les replays octet-pour-octet.
+- **✅ RÉSOLU (2026-06-18) — Dédup de message / unicité de nonce** : un index unique
+  `(acte_uuid, sender_sn, nonce)` (migration `2026-06-18-120000_unique_message_nonce`)
+  impose la non-réutilisation de nonce par expéditeur dans un acte — l'invariant
+  AES-GCM de [`ARCHITECTURE.md §8.5`](ARCHITECTURE.md#85-hypothèse-dunicité-de-nonce-sous-k_send). Un re-POST octet-pour-octet réutilise
+  le nonce et reçoit **409 Conflict** au lieu de créer un second `seq`/leaf. Couvert
+  par le test `server::tests::test_message_replay_is_rejected`.
 - **✅ RÉSOLU (2026-06-18) — Reliquat C5** : `build_auth_request` lit désormais `OsRng`
   (`authentication.rs`), homogène avec le reste du code (c'était déjà un CSPRNG).
 
@@ -506,7 +507,7 @@ dans la couche **identité / authentification / bootstrap de confiance** et dans
 | 6 | ✅ fait | **A8** — quarantaine visuelle du contenu `sigValid === false` |
 | 7 | ✅ fait | **A6 + C5** — `was_contributory()` sur ECIES ; `build_auth_request` sur `OsRng` |
 | 8 | ✅ fait | **A7** — hypothèse d'unicité de nonce sous `K_send` documentée ([`ARCHITECTURE.md §8.5`](ARCHITECTURE.md#85-hypothèse-dunicité-de-nonce-sous-k_send)) |
-| 9 | ouvert | **Dédup message** (replay octet-pour-octet) et **persistance d'identité** frontend |
+| 9 | ✅ fait / ⚠️ ouvert | **Dédup message** ✅ (index unique nonce → 409) ; **persistance d'identité** frontend (ouvert) |
 
 Les sections **C** et **D** sont des sujets de défense orale plus que
 d'implémentation — déjà bien anticipés dans [`ARCHITECTURE.md §9`](ARCHITECTURE.md#9-contraintes-réglementaires-françaises) et [`§10`](ARCHITECTURE.md#10-limites-assumées-et-perspectives).

@@ -30,12 +30,22 @@ pub enum AppError {
 
     #[error("bad request: {0}")]
     BadRequest(String),
+
+    #[error("conflict: {0}")]
+    Conflict(String),
 }
 
 impl From<diesel::result::Error> for AppError {
     fn from(e: diesel::result::Error) -> Self {
+        use diesel::result::{DatabaseErrorKind, Error as DieselError};
         match e {
-            diesel::result::Error::NotFound => AppError::NotFound("record not found".into()),
+            DieselError::NotFound => AppError::NotFound("record not found".into()),
+            // A unique-constraint violation is a 409, not a 500: duplicate SN at
+            // enrollment, duplicate participant, or a byte-for-byte message replay
+            // (the (acte_uuid, sender_sn, nonce) index — cf. ARCHITECTURE.md §8.5).
+            DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
+                AppError::Conflict("resource already exists (duplicate key)".into())
+            }
             _ => AppError::Database(e.to_string()),
         }
     }
@@ -48,6 +58,7 @@ impl IntoResponse for AppError {
             AppError::Forbidden(_)          => (StatusCode::FORBIDDEN, self.to_string()),
             AppError::NotFound(_)           => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::BadRequest(_)         => (StatusCode::BAD_REQUEST, self.to_string()),
+            AppError::Conflict(_)           => (StatusCode::CONFLICT, self.to_string()),
             AppError::LocalPki(_)
             | AppError::Crypto(_)           => (StatusCode::UNPROCESSABLE_ENTITY, self.to_string()),
             _                               => (StatusCode::INTERNAL_SERVER_ERROR, "internal server error".to_string()),

@@ -543,6 +543,8 @@ L'architecture actuelle est conçue pour permettre cette migration : les clés s
 
 `K_send_Alice = HKDF(K_acte, "send" || SN_Alice)` est **fixe pour toute la durée de vie de l'acte**. Chaque message chiffre avec cette même clé sous un **nonce AES-GCM aléatoire de 96 bits**. La sécurité repose donc entièrement sur la non-collision de ces nonces : une réutilisation de nonce sous GCM est catastrophique (fuite du XOR des clairs *et* récupération du sous-clé d'authentification ⇒ forgerie). La borne d'anniversaire place le risque à ≈ 2³² messages **par participant et par acte** — plusieurs ordres de grandeur au-dessus des volumes notariaux réalistes d'un dossier. L'hypothèse est donc tenue ici sans compteur de repli.
 
+> **Renforcement (implémenté)** : un index unique `(acte_uuid, sender_sn, nonce)` rejette désormais (**409 Conflict**) toute réutilisation de nonce par un expéditeur dans un acte — l'invariant GCM n'est plus seulement probabiliste, il est imposé au niveau du stockage. Effet de bord : le rejeu octet-pour-octet d'un message est fermé (cf. [`CRYPTO_REVIEW.md` §B](CRYPTO_REVIEW.md)).
+
 Si cette marge devenait insuffisante (usage à très haut volume), deux réponses propres : (a) **XChaCha20-Poly1305** (nonce 192 bits ⇒ collision aléatoire négligeable, aucun état à maintenir), ou (b) un **nonce déterministe à compteur** par `K_send`. La première est préférable car sans état ; elle dévierait toutefois de la décision « AES-256-GCM » figée pour ce PoC (cf. [`CLAUDE.md`](../CLAUDE.md)).
 
 ---

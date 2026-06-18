@@ -1,0 +1,1 @@
+DROP INDEX messages_acte_sender_nonce;
