@@ -24,7 +24,7 @@
 		tokenStore.init();
 		identity = $identityStore;
 		token = $tokenStore;
-		if (!identity || !token) goto('/login');
+		if (!identity || !token) goto('/');
 	});
 
 	$effect(() => {

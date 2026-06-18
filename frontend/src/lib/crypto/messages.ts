@@ -4,7 +4,7 @@
  * K_acte = HKDF(key=kMaster, info="notariat-msg-v1" || UUID(16), len=32)
  * K_send = HKDF(key=kActe, info="send" || SN(16), len=32)
  * encrypt: AES-256-GCM(K_send, plaintext, AAD=UUID(16)||ts(8 LE)||SN(16))
- * sign:    Ed25519(sk, SHA256(ciphertext || nonce(12) || UUID(16) || ts(8 LE) || SN(16)))
+ * sign:    Ed25519(sk, SHA256(MSG_DOMAIN_TAG || ciphertext || nonce(12) || UUID(16) || ts(8 LE) || SN(16)))
  */
 
 import { ed25519 } from '@noble/curves/ed25519.js';
@@ -15,6 +15,10 @@ import { randomBytes } from '@noble/ciphers/utils.js';
 import { uuidToBytes, hexToBytes, timestampToLeBytes } from './keys';
 
 const enc = new TextEncoder();
+
+// Domain-separation tag for client message signatures — mirrors
+// messaging_crypto::messages::MSG_DOMAIN_TAG in Rust (16 bytes incl. trailing NUL).
+const MSG_DOMAIN_TAG = enc.encode('localpki-msg-v1\0');
 
 // ─── Key derivation ───────────────────────────────────────────────────────────
 
@@ -46,7 +50,7 @@ function buildAad(acteUuid: string, timestamp: number, snHex: string): Uint8Arra
 	return aad;
 }
 
-// Signing payload: ciphertext || nonce(12) || UUID(16) || ts(8 LE) || SN(16)
+// Signing payload: MSG_DOMAIN_TAG || ciphertext || nonce(12) || UUID(16) || ts(8 LE) || SN(16)
 // Mirrors messaging_crypto::messages::signing_payload in Rust.
 function buildSigningPayload(
 	ciphertext: Uint8Array,
@@ -58,8 +62,9 @@ function buildSigningPayload(
 	const uuidBytes = uuidToBytes(acteUuid);
 	const tsBytes = timestampToLeBytes(timestamp);
 	const snBytes = hexToBytes(snHex);
-	const payload = new Uint8Array(ciphertext.length + 12 + 16 + 8 + 16);
+	const payload = new Uint8Array(MSG_DOMAIN_TAG.length + ciphertext.length + 12 + 16 + 8 + 16);
 	let offset = 0;
+	payload.set(MSG_DOMAIN_TAG, offset); offset += MSG_DOMAIN_TAG.length;
 	payload.set(ciphertext, offset); offset += ciphertext.length;
 	payload.set(nonce, offset);      offset += 12;
 	payload.set(uuidBytes, offset);  offset += 16;

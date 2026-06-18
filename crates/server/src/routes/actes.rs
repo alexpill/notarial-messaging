@@ -175,10 +175,17 @@ pub async fn create_acte(
 }
 
 pub async fn get_acte(
-    AuthenticatedSn(_caller): AuthenticatedSn,
+    AuthenticatedSn(caller_sn): AuthenticatedSn,
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<ActeResponse>, AppError> {
+    // Only participants may read an acte's metadata (titre, parties…). The party
+    // list of a notarial dossier is itself confidential — mirror the membership
+    // check the sibling routes (/keys, /messages, /merkle) already enforce.
+    registry::get_participant_key(&state.db, id.clone(), caller_sn)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+
     let acte = registry::get_acte(&state.db, id.clone())
         .await?
         .ok_or_else(|| AppError::NotFound(format!("acte '{}' not found", id)))?;

@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 pub struct EncryptedMessage {
     pub ciphertext: Vec<u8>,
     pub nonce: [u8; 12],
-    /// Ed25519(sk_sender, SHA256(ciphertext || nonce || acte_uuid || timestamp || SN_sender))
+    /// Ed25519(sk_sender, SHA256(MSG_DOMAIN_TAG || ciphertext || nonce || acte_uuid || timestamp || SN_sender))
     pub signature: ed25519_dalek::Signature,
     /// Monotonic sequence number within the acte, assigned by the server.
     pub seq: u64,
@@ -105,7 +105,12 @@ fn build_aad(acte_uuid: &uuid::Uuid, timestamp: i64, sn: &SerialNumber) -> Vec<u
     aad
 }
 
-/// Signing payload: ciphertext || nonce (12) || acte_uuid (16) || timestamp (8, LE) || SN (16).
+/// Domain-separation tag for client message signatures. Keeps a message
+/// signature from being reusable in another user-key context (SI over the cert
+/// DER, participant-add, revocation). Mirror in frontend/src/lib/crypto/messages.ts.
+pub const MSG_DOMAIN_TAG: &[u8] = b"localpki-msg-v1\0";
+
+/// Signing payload: tag || ciphertext || nonce (12) || acte_uuid (16) || timestamp (8, LE) || SN (16).
 fn signing_payload(
     ciphertext: &[u8],
     nonce: &[u8; 12],
@@ -113,7 +118,8 @@ fn signing_payload(
     timestamp: i64,
     sn: &SerialNumber,
 ) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(ciphertext.len() + 52);
+    let mut payload = Vec::with_capacity(MSG_DOMAIN_TAG.len() + ciphertext.len() + 52);
+    payload.extend_from_slice(MSG_DOMAIN_TAG);
     payload.extend_from_slice(ciphertext);
     payload.extend_from_slice(nonce);
     payload.extend_from_slice(acte_uuid.as_bytes());

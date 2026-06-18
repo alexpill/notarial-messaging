@@ -27,7 +27,7 @@
 		token = $tokenStore;
 
 		if (!identity || !token) {
-			goto('/login');
+			goto('/');
 			return;
 		}
 

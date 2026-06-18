@@ -10,7 +10,7 @@ use crate::{cert::LocalPKICert, error::LocalPkiError};
 #[derive(Debug, Clone)]
 pub struct RevocationRequest {
     pub cert: LocalPKICert,
-    /// Sign(sk_user_or_LRA, SHA256("Revoke" || SN || SI))
+    /// Sign(sk_user_or_LRA, SHA256(REVOKE_DOMAIN_TAG || SN || SI))
     pub revocation_signature: ed25519_dalek::Signature,
 }
 
@@ -45,10 +45,15 @@ pub fn validate_revocation_request(
     }
 }
 
-/// Canonical payload: "Revoke" || SN (16) || SI (64).
+/// Domain-separation tag for revocation signatures. Replaces the ad-hoc
+/// `"Revoke"` ASCII prefix with a versioned tag, consistent with the message,
+/// participant, EN-auth and Merkle signing contexts.
+pub const REVOKE_DOMAIN_TAG: &[u8] = b"localpki-revoke-v1\0";
+
+/// Canonical payload: REVOKE_DOMAIN_TAG || SN (16) || SI (64).
 fn revocation_payload(cert: &LocalPKICert) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(86);
-    payload.extend_from_slice(b"Revoke");
+    let mut payload = Vec::with_capacity(REVOKE_DOMAIN_TAG.len() + 80);
+    payload.extend_from_slice(REVOKE_DOMAIN_TAG);
     payload.extend_from_slice(&cert.tbs.serial_number.0);
     payload.extend_from_slice(&cert.signature_id.0.to_bytes());
     payload

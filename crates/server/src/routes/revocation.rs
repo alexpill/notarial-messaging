@@ -12,7 +12,7 @@ use std::sync::Arc;
 pub struct RevokeRequest {
     /// The LocalPKI certificate to revoke (JSON-serialized LocalPKICert).
     pub cert: serde_json::Value,
-    /// Ed25519(sk_user_or_LRA, SHA256("Revoke" || SN || SI)). base64url.
+    /// Ed25519(sk_user_or_LRA, SHA256(REVOKE_DOMAIN_TAG || SN || SI)). base64url.
     pub revocation_signature: String,
     /// Optional: SN of the LRA that countersigned the revocation. When set,
     /// the LRA's public key (looked up in the registry) is also accepted as a

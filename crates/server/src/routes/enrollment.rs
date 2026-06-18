@@ -219,6 +219,15 @@ pub async fn enroll_self(
     State(state): State<Arc<AppState>>,
     Json(req): Json<EnrollSelfRequest>,
 ) -> Result<(StatusCode, Json<EnrollResponse>), AppError> {
+    // Demo shortcut — gated off unless explicitly enabled. In a production-like
+    // config the only way in is the endorsed flow (POST /enroll), enforcing the
+    // face-to-face LRA check that LocalPKI's trust model assumes.
+    if !state.config.allow_self_enroll {
+        return Err(AppError::Forbidden(
+            "self-enrollment is disabled — a notaire must endorse this client (POST /enroll)".into(),
+        ));
+    }
+
     let cert: LocalPKICert = serde_json::from_value(req.cert)
         .map_err(|e| AppError::BadRequest(format!("invalid certificate: {e}")))?;
 

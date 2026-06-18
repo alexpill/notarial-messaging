@@ -11,6 +11,24 @@
 > bootstrap de confiance** et dans le **décalage doc↔code** — pas à la couche des
 > primitives.
 
+> **Mise à jour 2026-06-18** — passe de durcissement appliquée :
+> - **A5 ✅** — étiquettes de domaine ajoutées aux signatures clé-utilisateur :
+>   `localpki-msg-v1\0` (message, Rust + JS en lockstep), `localpki-participant-v1\0`
+>   (ajout de participant), `localpki-revoke-v1\0` (révocation, remplace le préfixe
+>   ASCII `"Revoke"`).
+> - **A6 ✅** — `ecies_decrypt` rejette les points d'ordre faible (`was_contributory()`).
+> - **A7 ✅ (documenté)** — hypothèse d'unicité de nonce énoncée en `ARCHITECTURE.md §8.5`.
+> - **A8 ✅** — le contenu `sigValid === false` est mis en quarantaine visuelle
+>   (bandeau rouge + `details` à déplier), plus affiché comme un message normal.
+> - **C5 ✅** — `build_auth_request` lit `OsRng` (cohérence ; c'était déjà un CSPRNG).
+> - **Autz `get_acte` ✅** — `GET /actes/:id` exige désormais l'appartenance
+>   (test `test_non_participant_cannot_get_acte`) — referme une fuite de métadonnées.
+> - **`/login` mort ✅** — les 4 gardes frontend redirigent vers `/`.
+> - **Self-enroll ✅ (gaté)** — `POST /enroll/self` est désactivé par défaut
+>   (`ALLOW_SELF_ENROLL`), si bien qu'une config « production-like » impose le flux
+>   endossé. Reste ouvert : la *dédup de message* (replay octet-pour-octet) et la
+>   *persistance d'identité* frontend.
+
 ---
 
 ## Table des matières

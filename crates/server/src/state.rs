@@ -64,6 +64,7 @@ impl AppState {
             server_port: 3000,
             frontend_origin: "http://localhost:5173".to_string(),
             notaire_enrollment_token: "test-notaire-token".to_string(),
+            allow_self_enroll: true,
         };
         Self {
             db,

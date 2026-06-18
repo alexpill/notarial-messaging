@@ -435,6 +435,30 @@ async fn test_get_acte_after_creation() {
 }
 
 #[tokio::test]
+async fn test_non_participant_cannot_get_acte() {
+    // An authenticated identity that is NOT a participant must not read an acte's
+    // metadata (titre, parties). The party list of a dossier is itself confidential.
+    let app = TestApp::new().await;
+    let (_kp, _sn, cert_notaire) = app.enroll_notaire("Notaire").await;
+    let (_kp2, sn_alice, _cert_alice) = app.enroll_user("Alice").await;
+    let (_kp3, _sn_eve, cert_eve) = app.enroll_user("Eve").await;
+    let token_notaire = app.authenticate(&cert_notaire).await;
+    let token_eve = app.authenticate(&cert_eve).await;
+
+    let (_, acte) = app
+        .post_json_authed(
+            "/actes",
+            &token_notaire,
+            &json!({ "titre": "Confidentiel", "parties": [sn_alice] }),
+        )
+        .await;
+    let acte_id = acte["uuid"].as_str().unwrap().to_owned();
+
+    let (status, _) = app.get_authed(&format!("/actes/{acte_id}"), &token_eve).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "non-participant must not read the dossier");
+}
+
+#[tokio::test]
 async fn test_list_actes_for_participant() {
     let app = TestApp::new().await;
     let (_kp, sn_notaire, cert_notaire) = app.enroll_notaire("Notaire").await;

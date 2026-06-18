@@ -295,9 +295,11 @@ Alice veut envoyer M dans l'acte A :
    (AAD = Additional Authenticated Data : lié au contexte, garantit
     qu'un chiffré valide dans un acte ne l'est pas dans un autre)
 
-4. Alice signe le chiffré :
+4. Alice signe le chiffré (étiquette de domaine `"localpki-msg-v1\0"` en tête) :
    SIG_Alice = Ed25519.Sign(sk_Alice,
-                             Hash(C_M || nonce_msg || acte_uuid || timestamp || SN_Alice))
+                             Hash("localpki-msg-v1\0" || C_M || nonce_msg || acte_uuid || timestamp || SN_Alice))
+   (l'étiquette empêche qu'une signature de message soit rejouée comme signature
+    d'un autre usage de la clé d'Alice — SI, ajout de participant, révocation.)
 
 5. Alice envoie au serveur :
    { C_M, nonce_msg, SIG_Alice, acte_uuid, timestamp, sender_sn: SN_Alice }
@@ -340,7 +342,7 @@ Bob reçoit { C_M, nonce_msg, SIG_Alice, acte_uuid, timestamp, sender_sn }
 
 3. Bob vérifie la signature (sur le ciphertext, comme le serveur l'a fait) :
    Ed25519.Verify(pk_Alice,
-                   Hash(C_M || nonce_msg || acte_uuid || timestamp || SN_Alice),
+                   Hash("localpki-msg-v1\0" || C_M || nonce_msg || acte_uuid || timestamp || SN_Alice),
                    SIG_Alice)
    Si invalide → non-authenticité, rejeter.
 ```
@@ -536,6 +538,12 @@ En production, un MMD de 1 à 5 secondes serait raisonnable pour une messagerie 
 Le NIST a standardisé en 2024 ML-KEM (FIPS 203, issu de Kyber) et ML-DSA (FIPS 204, issu de Dilithium) comme algorithmes post-quantiques. Pour un système notarial destiné à archiver sur des décennies, la migration vers ces algorithmes est inévitable.
 
 L'architecture actuelle est conçue pour permettre cette migration : les clés sont identifiées par `SN` dans LocalPKI, permettant une coexistence de plusieurs schémas cryptographiques dans la même base. La transition pourrait s'opérer par un re-enrollment progressif des utilisateurs avec de nouvelles clés ML-DSA/ML-KEM, sans rupture de service.
+
+### 8.5 Hypothèse d'unicité de nonce sous `K_send`
+
+`K_send_Alice = HKDF(K_acte, "send" || SN_Alice)` est **fixe pour toute la durée de vie de l'acte**. Chaque message chiffre avec cette même clé sous un **nonce AES-GCM aléatoire de 96 bits**. La sécurité repose donc entièrement sur la non-collision de ces nonces : une réutilisation de nonce sous GCM est catastrophique (fuite du XOR des clairs *et* récupération du sous-clé d'authentification ⇒ forgerie). La borne d'anniversaire place le risque à ≈ 2³² messages **par participant et par acte** — plusieurs ordres de grandeur au-dessus des volumes notariaux réalistes d'un dossier. L'hypothèse est donc tenue ici sans compteur de repli.
+
+Si cette marge devenait insuffisante (usage à très haut volume), deux réponses propres : (a) **XChaCha20-Poly1305** (nonce 192 bits ⇒ collision aléatoire négligeable, aucun état à maintenir), ou (b) un **nonce déterministe à compteur** par `K_send`. La première est préférable car sans état ; elle dévierait toutefois de la décision « AES-256-GCM » figée pour ce PoC (cf. `CLAUDE.md`).
 
 ---
 

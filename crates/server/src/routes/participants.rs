@@ -26,9 +26,14 @@ pub struct AddParticipantRequest {
     /// Whether to grant access to the existing message history.
     /// false = participant can only see messages from this point forward.
     pub grant_history: bool,
-    /// Notaire signature over SHA256(acte_uuid || participant_sn || grant_history). base64url.
+    /// Notaire signature over SHA256(PARTICIPANT_DOMAIN_TAG || acte_uuid || participant_sn || grant_history). base64url.
     pub notaire_signature: String,
 }
+
+/// Domain-separation tag for the notaire's add-participant signature. Keeps it
+/// from being reusable in another user-key context. Mirror in demo-cli
+/// (`make_add_participant_signature`) and the frontend acte page.
+const PARTICIPANT_DOMAIN_TAG: &[u8] = b"localpki-participant-v1\0";
 
 #[derive(Debug, Serialize)]
 pub struct AddParticipantResponse {
@@ -57,7 +62,7 @@ pub async fn add_participant(
         return Err(AppError::Unauthorized);
     }
 
-    // Verify the notaire's signature over SHA256(acte_uuid || participant_sn || grant_history).
+    // Verify the notaire's signature over SHA256(tag || acte_uuid || participant_sn || grant_history).
     let notaire_identity = registry::lookup_identity(&state.db, acte.notaire_sn.clone())
         .await?
         .ok_or_else(|| AppError::Database("notaire identity not found".into()))?;
@@ -72,6 +77,7 @@ pub async fn add_participant(
     );
 
     let mut payload = Vec::new();
+    payload.extend_from_slice(PARTICIPANT_DOMAIN_TAG);
     payload.extend_from_slice(acte_id.as_bytes());
     payload.extend_from_slice(req.participant_sn.as_bytes());
     payload.push(req.grant_history as u8);

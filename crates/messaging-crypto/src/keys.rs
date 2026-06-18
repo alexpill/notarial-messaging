@@ -82,6 +82,13 @@ pub fn ecies_decrypt(
     let ephemeral_pk = x25519_dalek::PublicKey::from(ct.ephemeral_pk);
     let shared = recipient_x25519_sk.diffie_hellman(&ephemeral_pk);
 
+    // Reject low-order ephemeral points: a non-contributory DH yields a known
+    // all-zero shared secret, so an attacker who can write the ciphertext could
+    // force a predictable symmetric key. Cheap hardening for an "état de l'art" claim.
+    if !shared.was_contributory() {
+        return Err(CryptoError::Decryption);
+    }
+
     let mut symmetric_key = Zeroizing::new([0u8; 32]);
     Hkdf::<Sha256>::new(Some(ephemeral_pk.as_bytes()), shared.as_bytes())
         .expand(b"notariat-ecies-v1", symmetric_key.as_mut())

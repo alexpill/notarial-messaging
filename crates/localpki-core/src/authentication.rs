@@ -35,10 +35,15 @@ pub trait EnDatabase: Send + Sync {
 
 /// Server side — build an AuthRequest from Alice's certificate.
 pub fn build_auth_request(cert: &LocalPKICert) -> AuthRequest {
+    // OsRng for consistency with the rest of the codebase. (`rand::random()` is
+    // already a CSPRNG via ThreadRng, so this is an auditability fix, not a
+    // security one — every nonce/key source now reads OsRng explicitly.)
+    let mut nonce = [0u8; 32];
+    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut nonce);
     AuthRequest {
         serial_number: cert.tbs.serial_number,
         signature_id: cert.signature_id.clone(),
-        nonce: rand::random(),
+        nonce,
     }
 }
 

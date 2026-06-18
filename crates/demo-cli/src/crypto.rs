@@ -19,7 +19,8 @@ pub fn make_lra_signature(lra_sk: &SigningKey, cert: &LocalPKICert) -> String {
 }
 
 /// Signature notaire requise par POST /actes/:id/participants :
-/// Ed25519(sk_notaire, SHA256(acte_id_bytes || participant_sn_bytes || grant_history as u8)).
+/// Ed25519(sk_notaire, SHA256(tag || acte_id_bytes || participant_sn_bytes || grant_history as u8)).
+/// `tag` = PARTICIPANT_DOMAIN_TAG (cf. server::routes::participants).
 #[allow(dead_code)]
 pub fn make_add_participant_signature(
     notaire_sk: &SigningKey,
@@ -28,6 +29,7 @@ pub fn make_add_participant_signature(
     grant_history: bool,
 ) -> String {
     let mut payload = Vec::new();
+    payload.extend_from_slice(b"localpki-participant-v1\0");
     payload.extend_from_slice(acte_id.as_bytes());
     payload.extend_from_slice(participant_sn.as_bytes());
     payload.push(grant_history as u8);

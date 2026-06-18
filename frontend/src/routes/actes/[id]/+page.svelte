@@ -66,7 +66,7 @@
 		token = $tokenStore;
 
 		if (!identity || !token) {
-			goto('/login');
+			goto('/');
 			return;
 		}
 
@@ -273,8 +273,10 @@
 			// Validate participant exists
 			await getIdentity(sn);
 
-			// Sign SHA256(acte_uuid || participant_sn || grant_history)
+			// Sign SHA256(PARTICIPANT_DOMAIN_TAG || acte_uuid || participant_sn || grant_history)
+			// Tag mirrors server::routes::participants::PARTICIPANT_DOMAIN_TAG (16+ bytes incl. trailing NUL).
 			const payload = new Uint8Array([
+				...new TextEncoder().encode('localpki-participant-v1\0'),
 				...new TextEncoder().encode(acte.uuid),
 				...new TextEncoder().encode(sn),
 				grantHistory ? 1 : 0
@@ -407,10 +409,22 @@
 							<p class="text-xs font-medium mb-1 opacity-70">{msg.display_name ?? shortSn(msg.sender_sn)}</p>
 						{/if}
 
-						{#if msg.text !== null}
-							<p class="text-sm">{msg.text}</p>
-						{:else}
+						{#if msg.text === null}
 							<p class="text-xs italic opacity-60">[Déchiffrement impossible]</p>
+						{:else if msg.sigValid === false}
+							<!-- Signature invalide : K_send étant partagée par tous les participants,
+							     la signature Ed25519 est la SEULE preuve de l'expéditeur. On ne
+							     présente donc pas le contenu non vérifié comme un message normal —
+							     il est mis en quarantaine derrière une action explicite. -->
+							<div class="border border-red-500 bg-red-500/10 rounded p-2">
+								<p class="text-xs font-medium text-red-400">⚠ Signature invalide — expéditeur non prouvé</p>
+								<details class="mt-1">
+									<summary class="text-xs cursor-pointer opacity-70">Afficher le contenu non vérifié</summary>
+									<p class="text-sm opacity-60 mt-1">{msg.text}</p>
+								</details>
+							</div>
+						{:else}
+							<p class="text-sm">{msg.text}</p>
 						{/if}
 
 						<div class="flex items-center justify-end gap-1 mt-1">
@@ -418,7 +432,7 @@
 							{#if msg.sigValid === true}
 								<span class="text-xs opacity-60" title="Signature Ed25519 vérifiée">✓</span>
 							{:else if msg.sigValid === false}
-								<span class="text-xs text-yellow-400" title="Signature invalide">⚠</span>
+								<span class="text-xs text-red-400" title="Signature invalide">⚠</span>
 							{/if}
 							<span class="text-xs opacity-50">{formatTime(msg.sent_at)}</span>
 						</div>

@@ -17,6 +17,13 @@ pub struct AppConfig {
     /// logs as the operator secret. Reusable on purpose: it can mint several
     /// notaires.
     pub notaire_enrollment_token: String,
+    /// Whether `POST /enroll/self` (one-click client self-enrollment, no LRA
+    /// endorsement, no physical identity check) is allowed. It is a **demo
+    /// shortcut**, not the LocalPKI trust path. Secure-by-default: disabled
+    /// unless `ALLOW_SELF_ENROLL=true`. A "production-like" config (env unset)
+    /// thus forces the face-to-face endorsed flow — the basis of eIDAS
+    /// Substantiel. Dev `.env` sets it true so the web demo stays one-click.
+    pub allow_self_enroll: bool,
 }
 
 impl AppConfig {
@@ -34,6 +41,9 @@ impl AppConfig {
                 .unwrap_or_else(|_| "http://localhost:5173".to_string()),
             notaire_enrollment_token: std::env::var("NOTAIRE_ENROLLMENT_TOKEN")
                 .unwrap_or_else(|_| random_token()),
+            allow_self_enroll: std::env::var("ALLOW_SELF_ENROLL")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
         })
     }
 }
