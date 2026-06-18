@@ -152,7 +152,7 @@ La révocation est gérée par le protocole LocalPKI standard (Algorithme 4 du p
 
 ```
 Alice (ou la LRA) → EN :
-  SIRev = Cert_Alice || Sign(sk_Alice_ou_LRA, Hash("Revoke" || SN_Alice || SI_Alice))
+  SIRev = Cert_Alice || Sign(sk_Alice_ou_LRA, Hash("localpki-revoke-v1\0" || SN_Alice || SI_Alice))
 
 EN vérifie la signature, supprime (SN_Alice, SI_Alice) de sa base.
 ```
@@ -356,7 +356,7 @@ Précondition : Charlie a un certificat LocalPKI valide chez l'EN.
 
 1. Notaire fait une requête signée au serveur :
    { acte_uuid, add: SN_Charlie, grant_history: true/false,
-     notaire_sig: Sign(sk_Notaire, Hash(acte_uuid || SN_Charlie || grant_history)) }
+     notaire_sig: Sign(sk_Notaire, Hash("localpki-participant-v1\0" || acte_uuid || SN_Charlie || grant_history)) }
 
 2. Serveur vérifie que le demandeur est bien le notaire de l'acte.
 
@@ -590,7 +590,7 @@ En production, toute solution intégrée à l'infrastructure notariale français
 2. **Trois chemins d'enrôlement, stratifiés par rôle** (le rôle vit dans le registre EN — cf. ci-dessous) :
    - `POST /enroll/notaire` — la personne génère ses clés **dans le navigateur**, auto-signe son TBSCert, et présente le **jeton d'enrôlement notaire**. Le serveur vérifie le jeton (comparaison constante-time) et enregistre l'identité avec `role = notaire`. La clé privée ne transite jamais ; seul le jeton (l'autorité d'amorçage de l'EN) circule.
    - `POST /enroll` (endossé) — `/notaire/enroller` fait jouer au notaire le rôle de LRA : il endosse le cert d'un client via `enrollment.ts::endorseCert()` (signature Ed25519 sur `SHA256(SN||SI||pk)`). Le serveur vérifie la signature **et que l'endosseur a `role = notaire`** avant d'enregistrer le client (`role = client`).
-   - `POST /enroll/self` — raccourci démo : le client s'auto-enrôle en un clic, toujours avec `role = client`. Il ne peut **jamais** se déclarer notaire (cela exige le jeton). L'ancre de confiance n'est donc pas contournée pour les rôles privilégiés.
+   - `POST /enroll/self` — raccourci démo : le client s'auto-enrôle en un clic, toujours avec `role = client`. Il ne peut **jamais** se déclarer notaire (cela exige le jeton). L'ancre de confiance n'est donc pas contournée pour les rôles privilégiés. **Ce chemin est désactivé par défaut** (flag `ALLOW_SELF_ENROLL`, secure-by-default) : une configuration « production-like » le coupe et force le flux endossé `POST /enroll` (vérification face-à-face, base du niveau eIDAS Substantiel). En dev, le `.env` l'active pour garder l'onboarding « un clic ».
 
 **Gestion des rôles (implémentée)** : le registre des identités porte un attribut `role ∈ {notaire, client}` (colonne `identities.role`, défaut `client`). Le rôle **ne peut pas** vivre dans le TBSCert auto-signé (il serait auto-déclaré) ; sa place est **côté EN**. Il est posé par un processus de confiance : le **jeton d'enrôlement notaire** (l'EN désigne ses notaires — fidèle au papier §2.1 « the LRA is registered by some EN ») ou un seed opérateur (le `demo-cli` insère le notaire d'amorçage directement en base). Deux gates en découlent : `POST /enroll` n'accepte un endossement que si `lra_sn.role == notaire`, et `POST /actes` n'autorise la création d'acte que pour un `role == notaire`. La chaîne **EN → notaire → client** est ainsi *imposée*, pas seulement *possible*. Le jeton est réutilisable (plusieurs notaires) ; en dev il est fixe via `.env` et affiché dans l'UI, en prod il est aléatoire par démarrage et imprimé dans les logs (secret opérateur).
 

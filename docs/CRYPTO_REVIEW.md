@@ -67,8 +67,8 @@ Les faiblesses ouvertes se concentrent ailleurs :
    challenge-response (A1 ✅ résolu). L'ancre de confiance est désormais imposée :
    attribut `role` côté EN, jeton d'enrôlement notaire, gates `role==notaire` sur
    `/enroll` et `/actes` (A2 + A3 ✅ résolus le 2026-06-17 ; « Root LRA » supprimé).
-   Reste ouvert côté frontend : pas de flux « se reconnecter » (sessionStorage), et
-   les redirections mortes `/login` (cf. §B).
+   Reste ouvert côté frontend : pas de flux « se reconnecter » (sessionStorage). Les
+   redirections mortes `/login` sont corrigées (→ `/`, MàJ 2026-06-18 ; cf. §B).
 2. **Décalage doc↔code** *(✅ résolu le 2026-06-17)* : plusieurs affirmations des
    documents (SI = `SHA256(DER)`, « rcgen pour la génération, x509-cert pour le
    parsing ») ne correspondaient pas au code — désormais réconciliées (cf. A4 et §B).
@@ -93,7 +93,7 @@ La revue précédente a fait son travail — voici l'état de ses items :
 | **C3** — pas d'endpoint `/revoke` | ✅ Corrigé (`crates/server/src/routes/revocation.rs`) |
 | **C4** — `timestamp` non borné | ✅ Corrigé (cap de dérive ±300s, `messages.rs:71`) |
 | **B3** — `seq` non signé par le client | ⚠️ Accepté + documenté (`ARCHITECTURE.md §10.1`) |
-| **C5** — `rand::random()` vs `OsRng` | 🟡 Partiel : reste `authentication.rs:41` (`build_auth_request`) |
+| **C5** — `rand::random()` vs `OsRng` | ✅ Résolu (2026-06-18) : `build_auth_request` lit `OsRng` |
 | **C6** — `parent_hash` mal nommé | 🟡 Documenté dans le SQL et §11, pas renommé |
 
 ---
@@ -250,7 +250,12 @@ diffèrent.
 
 ### A5 — Domain separation appliquée à la clé EN mais pas aux clés utilisateur
 
-🟠 **Sévérité : hygiène crypto (incohérence)**
+✅ **RÉSOLU (2026-06-18)** — tags de domaine ajoutés aux signatures clé-utilisateur,
+en lockstep Rust/JS/demo-cli : `localpki-msg-v1\0` (message), `localpki-participant-v1\0`
+(ajout participant), `localpki-revoke-v1\0` (révocation, remplace le préfixe `"Revoke"`).
+Finding initial conservé ci-dessous pour traçabilité.
+
+🟠 **Sévérité (historique) : hygiène crypto (incohérence)**
 
 La passe d'hygiène a ajouté `localpki-auth-v1` / `localpki-merkle-v1` à la clé EN.
 Mais la clé **utilisateur** signe dans quatre contextes sans tag versionné :
@@ -270,7 +275,10 @@ Mais c'est incohérent avec la discipline appliquée à la clé EN.
 
 ### A6 — ECIES ne rejette pas les points d'ordre faible
 
-🟡 **Sévérité : durcissement (impact faible)**
+✅ **RÉSOLU (2026-06-18)** — `ecies_decrypt` rejette désormais un shared secret non
+contributif (`was_contributory()`). Finding initial conservé ci-dessous.
+
+🟡 **Sévérité (historique) : durcissement (impact faible)**
 
 `ecies_decrypt` (`crates/messaging-crypto/src/keys.rs:78`) appelle
 `diffie_hellman` et ne vérifie jamais `SharedSecret::was_contributory()`. Un
@@ -283,7 +291,11 @@ pour une revendication « état de l'art » c'est un durcissement d'une ligne.
 
 ### A7 — `K_send` déterministe longue durée + nonce aléatoire
 
-🟡 **Sévérité : hypothèse à documenter**
+✅ **DOCUMENTÉ (2026-06-18)** — hypothèse d'unicité de nonce énoncée en
+`ARCHITECTURE.md §8.5` (borne d'anniversaire ≈ 2³², issue propre = XChaCha20-Poly1305
+si la contrainte AES-GCM tombe). Finding initial conservé ci-dessous.
+
+🟡 **Sévérité (historique) : hypothèse à documenter**
 
 `K_send = HKDF(K_acte, "send"‖SN)` est fixe pour toute la durée de vie de l'acte,
 et chaque message réutilise cette clé avec un nonce GCM aléatoire de 96 bits
@@ -296,7 +308,11 @@ phrase en §8 énonçant l'hypothèse suffit, puisqu'il n'y a pas de compteur en
 
 ### A8 — Le client affiche du contenu non vérifié
 
-🟡 **Sévérité : UX de non-répudiation**
+✅ **RÉSOLU (2026-06-18)** — le contenu `sigValid === false` est mis en quarantaine
+visuelle (bandeau rouge + `details` à déplier), plus présenté comme un message normal.
+Finding initial conservé ci-dessous.
+
+🟡 **Sévérité (historique) : UX de non-répudiation**
 
 `decryptAndVerify` (`frontend/src/routes/actes/[id]/+page.svelte:161-184`) affiche
 le texte déchiffré même quand `sigValid === false`, avec seulement un petit ⚠.
@@ -313,13 +329,11 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
 
 ## B. Findings ingénierie / correction
 
-- **`goto('/login')` est une route morte** — 4 sites d'appel
-  (`actes/+page.svelte:30`, `actes/[id]/+page.svelte:69`,
-  `notaire/actes/+page.svelte:30`, `notaire/actes/new/+page.svelte:27`) redirigent
-  vers une route inexistante (seules `/auth` et `/enroll` existent, et `/enroll`
-  rebondit vers `/`). Tout deep-link non authentifié fait un 404. Aucun flux
-  « se connecter avec une identité existante » n'existe (sessionStorage uniquement,
-  §10.1).
+- **✅ RÉSOLU (2026-06-18) — `goto('/login')` (était une route morte)** : les 4 gardes
+  (`actes/+page.svelte`, `actes/[id]/+page.svelte`, `notaire/actes/+page.svelte`,
+  `notaire/actes/new/+page.svelte`) redirigent désormais vers `/` (le sélecteur de rôle,
+  qui ne 404 jamais). *Reste ouvert :* aucun flux « se connecter avec une identité
+  existante » (sessionStorage uniquement, §10.1).
 - **✅ RÉSOLU (2026-06-17) — `root_lra_signing_key` (état mort) supprimé** de
   `AppState`, ainsi que `root_lra_sn`. *Finding initial :* la clé était seedée et
   stockée mais jamais lue (le compilateur le confirmait : *field never read*).
@@ -345,8 +359,8 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
   300s et obtenir un second `seq`/leaf. Signature valide → le log montre le « même »
   message deux fois. Un log de transparence notarial ne devrait sans doute pas
   accepter les replays octet-pour-octet.
-- **Reliquat C5** : `build_auth_request` utilise encore `rand::random()`
-  (`authentication.rs:41`) alors que le reste est passé à `OsRng`.
+- **✅ RÉSOLU (2026-06-18) — Reliquat C5** : `build_auth_request` lit désormais `OsRng`
+  (`authentication.rs`), homogène avec le reste du code (c'était déjà un CSPRNG).
 
 ---
 
@@ -386,7 +400,7 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
 
 | Exigence | État | Verdict |
 |---|---|---|
-| eIDAS niveau Substantiel (échanges préalables) | enrôlement face-à-face LRA *si le flux endossé est utilisé* (cf. A2) | ⚠️ conditionnel |
+| eIDAS niveau Substantiel (échanges préalables) | face-à-face imposé par défaut — self-enroll gaté `ALLOW_SELF_ENROLL` (off hors dev), cf. A2 | ✅ conditionné au flag |
 | eIDAS niveau Élevé (AAE) | hors périmètre | ✅ documenté |
 | eIDAS qualifié (PSCQ) | non | ✅ explicite §9.1 |
 | Horodatage qualifié RFC 3161 | non (timestamps serveur) | ⚠️ documenté §6.4 |
@@ -401,9 +415,10 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
 1. **Preuve de possession à l'authentification (A1)** : sans elle, la valeur
    probante de « telle session = telle personne » est faible — un credential
    rejouable n'établit pas la présence de la partie.
-2. **Bootstrap d'identité (A2)** : tant que `enroll_self` est le chemin par défaut,
-   l'enrôlement face-à-face (base du niveau Substantiel) n'est pas effectivement
-   appliqué.
+2. **Bootstrap d'identité (A2 — ✅ gaté 2026-06-18)** : `enroll_self` est désormais
+   désactivé par défaut (`ALLOW_SELF_ENROLL`). En config production-like, seul le flux
+   endossé face-à-face (base du niveau Substantiel) est possible. En dev le flag l'active
+   pour garder l'onboarding « un clic ».
 3. **Horodatage non qualifié** : intégrer une TSA RFC 3161 (Universign, CertEurope,
    Docaposte) — coût marginal faible (signer la racine Merkle périodique via TSA).
 4. **`K_master` sans rotation** (`ARCHITECTURE.md §10.1`) : un changement de notaire
@@ -458,9 +473,10 @@ un relecteur appuiera — et où il faut prendre les devants :
    `/auth/verify` rejoué échoue (nonce consommé). Montrer le test
    `test_auth_challenge_is_single_use`. Bon exemple à raconter : « j'ai audité mon
    propre login, trouvé qu'il était rejouable, et fermé le trou. »
-2. **« Montrez-moi le modèle de confiance fonctionner de bout en bout. »** Si le
-   chemin de démo est `enroll_self` (A2), on démontre l'opposé de la thèse. Faire de
-   `/notaire/enroller` le flux phare.
+2. **« Montrez-moi le modèle de confiance fonctionner de bout en bout. »** Le
+   self-enroll est désormais gaté (off par défaut, A2 ✅) — en config production-like
+   seul le flux endossé passe. Faire de `/notaire/enroller` (ou du scénario `demo-cli`)
+   le flux phare en démo, plutôt que le raccourci « un clic ».
 3. **« Vos docs disent SHA256(DER) et rcgen ; votre code ne fait ni l'un ni
    l'autre. »** (A4 + B — ✅ corrigés le 2026-06-17, mais sache l'expliquer). Petit individuellement, mais deux décalages doc/code
    amènent un relecteur à se méfier de *toutes* les docs — y compris des parties
@@ -484,11 +500,12 @@ dans la couche **identité / authentification / bootstrap de confiance** et dans
 | 1 | ✅ fait | **A1** — challenge-response au login (`/auth/challenge` + PoP signée vérifiée dans `/auth/verify`) ; test anti-rejeu `test_auth_challenge_is_single_use` |
 | 2 | ✅ fait | **A2 + A3** — attribut `role` côté EN ; jeton d'enrôlement notaire (`/enroll/notaire`) ; gates `role==notaire` sur `/enroll` et `/actes` ; suppression de « Root LRA » |
 | 3 | ✅ fait | **A4 + B (docs)** — doc SI alignée sur `Sign(sk, tbs_der)` ; rcgen retiré ; docs → x509-cert |
-| 4 | ~15 min | **A5** — tags de domaine sur les signatures utilisateur (`localpki-msg-v1`, `localpki-participant-v1`) |
-| 5 | partiel | **B** — ✅ `root_lra_signing_key` mort retiré + `seed_root_lra` serveur supprimée (A2/A3) ; reste ouvert : `/login` → `/auth` dans les 4 gardes frontend |
-| 6 | ~10 min | **A8** — ne pas afficher le contenu `sigValid === false` sans quarantaine visuelle |
-| 7 | ~10 min | **A6 + C5** — `was_contributory()` sur ECIES ; homogénéiser sur `OsRng` |
-| 8 | ~5 min | **A7** — documenter l'hypothèse d'unicité de nonce sous `K_send` longue durée (§8) |
+| 4 | ✅ fait | **A5** — tags de domaine sur les signatures utilisateur (`localpki-msg-v1`, `localpki-participant-v1`, `localpki-revoke-v1`) |
+| 5 | ✅ fait | **B** — `root_lra_signing_key`/`seed_root_lra` supprimés (A2/A3) ; `/login` → `/` dans les 4 gardes ; autz `get_acte` (appartenance) |
+| 6 | ✅ fait | **A8** — quarantaine visuelle du contenu `sigValid === false` |
+| 7 | ✅ fait | **A6 + C5** — `was_contributory()` sur ECIES ; `build_auth_request` sur `OsRng` |
+| 8 | ✅ fait | **A7** — hypothèse d'unicité de nonce sous `K_send` documentée (`ARCHITECTURE.md §8.5`) |
+| 9 | ouvert | **Dédup message** (replay octet-pour-octet) et **persistance d'identité** frontend |
 
 Les sections **C** et **D** sont des sujets de défense orale plus que
 d'implémentation — déjà bien anticipés dans `ARCHITECTURE.md §9` et `§10`.
