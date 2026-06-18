@@ -15,8 +15,15 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
 pub fn build_router(state: Arc<AppState>) -> Router {
+    // `frontend_origin` is validated to parse in AppConfig::from_env, so this
+    // never falls back at runtime; the fallback only avoids an unwrap here.
+    let origin = state
+        .config
+        .frontend_origin
+        .parse::<axum::http::HeaderValue>()
+        .unwrap_or_else(|_| axum::http::HeaderValue::from_static("http://localhost:5173"));
     let cors = CorsLayer::new()
-        .allow_origin(state.config.frontend_origin.parse::<axum::http::HeaderValue>().unwrap())
+        .allow_origin(origin)
         .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
         .allow_headers(tower_http::cors::Any);
 

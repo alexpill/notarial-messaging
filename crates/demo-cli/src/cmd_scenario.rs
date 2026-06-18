@@ -98,7 +98,10 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
 
     // ─── Étape 4 : Création de l'acte ───────────────────────────────────────
     step(4, 7, "Création de l'acte « Vente 12 rue de la Paix, Paris 75001 »");
-    let notaire_token = notaire.session_token.as_deref().unwrap();
+    let notaire_token = notaire
+        .session_token
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("notaire: session token manquant après authentification"))?;
     let acte = client
         .create_acte(
             notaire_token,
@@ -121,7 +124,10 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
     step(5, 7, "Échange de messages chiffrés");
 
     // Alice récupère K_acte et envoie le premier message.
-    let alice_token = alice.session_token.as_deref().unwrap();
+    let alice_token = alice
+        .session_token
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("alice: session token manquant après authentification"))?;
     let alice_kp = alice.keypair()?;
     let alice_sn = alice.serial_number()?;
     let alice_c_acte = client.get_acte_key(alice_token, &acte_id).await?;
@@ -141,7 +147,10 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
     ));
 
     // Bob récupère K_acte et envoie sa réponse.
-    let bob_token = bob.session_token.as_deref().unwrap();
+    let bob_token = bob
+        .session_token
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("bob: session token manquant après authentification"))?;
     let bob_kp = bob.keypair()?;
     let bob_sn = bob.serial_number()?;
     let bob_c_acte = client.get_acte_key(bob_token, &acte_id).await?;

@@ -37,8 +37,16 @@ impl AppConfig {
                 .unwrap_or_else(|_| "3000".to_string())
                 .parse()
                 .map_err(|_| AppError::Config("SERVER_PORT: invalid port number".to_string()))?,
-            frontend_origin: std::env::var("FRONTEND_ORIGIN")
-                .unwrap_or_else(|_| "http://localhost:5173".to_string()),
+            frontend_origin: {
+                let origin = std::env::var("FRONTEND_ORIGIN")
+                    .unwrap_or_else(|_| "http://localhost:5173".to_string());
+                // Validate eagerly so a malformed origin fails at startup with a
+                // clear error, rather than panicking later when building the CORS layer.
+                origin
+                    .parse::<axum::http::HeaderValue>()
+                    .map_err(|_| AppError::Config("FRONTEND_ORIGIN: invalid HTTP header value".to_string()))?;
+                origin
+            },
             notaire_enrollment_token: std::env::var("NOTAIRE_ENROLLMENT_TOKEN")
                 .unwrap_or_else(|_| random_token()),
             allow_self_enroll: std::env::var("ALLOW_SELF_ENROLL")
