@@ -36,6 +36,8 @@
 	let sending = $state(false);
 	let error = $state('');
 	let merkleRoot = $state<string | null>(null);
+	let merkleLeaves = $state(0);
+	let merkleSignedAt = $state<number | null>(null);
 	let showMerkle = $state(false);
 	let lastSeq = $state(-1);
 	let showAddParticipant = $state(false);
@@ -213,7 +215,11 @@
 		ws.onmessage = async (evt) => {
 			try {
 				const data = JSON.parse(evt.data as string);
-				if (data.event === 'new_message') await loadMessages(lastSeq);
+				if (data.event === 'new_message') {
+					await loadMessages(lastSeq);
+					// Keep the transparency-log panel live if it's open.
+					if (showMerkle) await fetchMerkle();
+				}
 			} catch {}
 		};
 
@@ -307,6 +313,8 @@
 		try {
 			const resp = await getMerkleRoot(token, acteId);
 			merkleRoot = resp.root;
+			merkleLeaves = resp.leaves_count;
+			merkleSignedAt = resp.en_signature ? resp.signed_at : null;
 			showMerkle = true;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -350,9 +358,21 @@
 
 	<!-- Merkle panel -->
 	{#if showMerkle}
-		<div class="border-b bg-muted/50 px-4 py-2 text-xs font-mono flex items-center justify-between">
-			<span class="truncate">Root : {merkleRoot ?? '(vide)'}</span>
-			<button onclick={() => (showMerkle = false)} class="ml-2 text-muted-foreground hover:text-foreground shrink-0">✕</button>
+		<div class="border-b bg-muted/50 px-4 py-2 text-xs">
+			<div class="flex items-center justify-between mb-1">
+				<span class="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">Journal de transparence (Merkle)</span>
+				<button onclick={() => (showMerkle = false)} class="text-muted-foreground hover:text-foreground shrink-0">✕</button>
+			</div>
+			<div class="flex items-baseline gap-2">
+				<span class="text-muted-foreground shrink-0">Racine :</span>
+				<span class="font-mono truncate" title={merkleRoot ?? ''}>{merkleRoot ?? '(journal vide)'}</span>
+			</div>
+			<div class="flex items-center gap-3 mt-1 text-muted-foreground">
+				<span>{merkleLeaves} message{merkleLeaves > 1 ? 's' : ''} scellé{merkleLeaves > 1 ? 's' : ''}</span>
+				{#if merkleSignedAt}
+					<span class="text-emerald-600 dark:text-emerald-400">● Racine signée par l'EN · {formatTime(merkleSignedAt)}</span>
+				{/if}
+			</div>
 		</div>
 	{/if}
 
