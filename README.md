@@ -18,8 +18,9 @@ Cryptolis) où les identités des parties sont garanties par des CA PKIX distant
 
 **LocalPKI** inverse ce modèle : les certificats sont auto-signés par les
 utilisateurs eux-mêmes. Le notaire joue le rôle d'autorité de confiance locale
-(Electronic Notary) en ne stockant que le hash `(SN, SI)` de chaque certificat
-— jamais son contenu.
+(Electronic Notary) en ne stockant que l'enregistrement `(SN, SI)` de chaque
+certificat — étendu ici avec la clé publique pour la messagerie — jamais le
+contenu des échanges.
 
 Ce projet construit un système de messagerie sur cette fondation :
 
@@ -68,7 +69,7 @@ Pour la structure du code, voir l'arborescence des crates ci-dessus et les `lib.
 ## Prérequis
 
 - **Rust** stable ≥ 1.75
-- **Node.js** ≥ 20
+- **Node.js** ≥ 20 + **pnpm** (`corepack enable`)
 - **SQLite 3** (libsqlite3-dev sur Debian/Ubuntu, inclus sur macOS)
 
 ---
@@ -111,8 +112,8 @@ cargo run -p server
 ```bash
 cd frontend
 cp .env.example .env   # jeton notaire de démo (doit matcher le .env racine)
-npm install
-npm run dev
+pnpm install
+pnpm dev
 # Interface disponible sur http://localhost:5173
 ```
 

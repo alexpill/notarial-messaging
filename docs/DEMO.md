@@ -106,7 +106,7 @@ est censé vérifier l'identité physique **en personne** à cette étape) :
 <img src="images/09-notaire-endosse.png" alt="Endossement notaire" width="500" />
 
 Après **« Vérifié — approuver »**, le notaire signe l'endossement avec sa clé
-privée et l'identité est enregistrée auprès de l'EN (qui ne stocke que le hash) :
+privée et l'identité est enregistrée auprès de l'EN (qui ne conserve que l'enregistrement (SN, SI) + la clé publique, jamais le contenu des échanges) :
 
 <img src="images/10-endossement-succes.png" alt="Endossement réussi" width="500" />
 

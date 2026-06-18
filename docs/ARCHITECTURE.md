@@ -2,7 +2,7 @@
 ## Basée sur LocalPKI (Dumas et al., 2019)
 
 > Document d'architecture technique — Sujet S001, Astéroïde 2026  
-> Statut : base de conception, pré-implémentation
+> Statut : document d'architecture — aligné sur l'implémentation
 
 ---
 
@@ -30,7 +30,7 @@ Dans le notariat français actuel, les communications entre notaires et clients 
 
 ### 1.2 Ce que LocalPKI change
 
-Dans PKIX, la CA signe le certificat de l'utilisateur — la confiance est déléguée vers le haut. Dans LocalPKI, **l'utilisateur signe lui-même son certificat** et le notaire ne stocke que le hash de ce certificat `(SN, SI)`. La confiance est ancrée localement, vérifiable interactivement via l'EN, sans dépendance à une CA distante.
+Dans PKIX, la CA signe le certificat de l'utilisateur — la confiance est déléguée vers le haut. Dans LocalPKI, **l'utilisateur signe lui-même son certificat** et le notaire n'enregistre, dans le modèle du papier, que l'empreinte `(SN, SI)` de ce certificat (notre implémentation l'étend pour la messagerie — cf. §2.2 et §11). La confiance est ancrée localement, vérifiable interactivement via l'EN, sans dépendance à une CA distante.
 
 Ce changement de paradigme est directement applicable à une messagerie notariale : plutôt qu'un annuaire centralisé de comptes, les identités des parties sont ancrées dans le registre LocalPKI de chaque office notarial.
 
@@ -66,7 +66,7 @@ Dans notre contexte : **l'infrastructure d'Astéroïde** (ou à terme, une infra
 
 Rôle :
 - Génération et distribution des Serial Numbers (SN)
-- Stockage de la base `{(SN_i, SI_i)}` — uniquement des hashes, jamais de contenu
+- Stockage du registre `{(SN_i, SI_i)}` (enregistrement LocalPKI du papier), **étendu** pour la messagerie avec la clé publique `pk` et le `tbs_der` figé (cf. §11) — jamais le contenu des messages
 - Réponse aux requêtes d'authentification (mode privé OCSP-like ou mode public CVL)
 - Hébergement du HSM pour la gestion des clés de session
 - Hébergement du Transparency log (intégrité des messages)
@@ -176,7 +176,7 @@ K_master  (HSM — ne quitte jamais le matériel)
                     │   C_acte_Notaire = ECIES(pk_Notaire, K_acte)
                     │
                     └─ Archive HSM :
-                        C_acte_archive = ECIES(pk_HSM, K_acte)
+                        C_acte_archive = ECIES(pk_HSM, K_acte || acte_uuid)
                         (stocké une fois par acte, à la création)
 ```
 
@@ -310,7 +310,7 @@ Alice veut envoyer M dans l'acte A :
       → Rejette les messages forgés avant tout stockage.
    c. Stocke le message.
    d. Ajoute une feuille au Transparency log :
-      leaf = Hash(SIG_Alice || acte_uuid || timestamp)
+      leaf = SHA-256(0x00 || SIG_Alice || acte_uuid || logged_at || seq)
    e. Notifie les autres participants.
 ```
 
@@ -413,10 +413,10 @@ Inspiré du principe d'attestation périodique signée par une autorité de conf
 Le Transparency log est un **journal append-only** structuré en arbre de Merkle. Chaque entrée est :
 
 ```
-leaf_i = SHA-256(SIG_i || acte_uuid || timestamp_i || seq_i)
+leaf_i = SHA-256(0x00 || SIG_i || acte_uuid || logged_at_i || seq_i)
 ```
 
-Où `seq_i` est le numéro de séquence monotone du message dans l'acte.
+Où `0x00` est le préfixe feuille RFC 6962 (séparation de domaine feuille/nœud interne), `logged_at_i` l'horloge serveur au moment de l'append, et `seq_i` le numéro de séquence monotone du message dans l'acte.
 
 La racine de l'arbre `root_n` est signée **à chaque append** par l'EN, avec une étiquette de domaine pour éviter toute confusion avec d'autres usages de `sk_EN` (ex : `AuthResponse`) :
 ```
@@ -738,7 +738,9 @@ messages (
   sender_sn  TEXT REFERENCES identities(sn),
   c_message  TEXT NOT NULL,        -- AES-256-GCM(K_send_sender, M) — opaque serveur
   nonce      TEXT NOT NULL,        -- 96-bit nonce base64
-  signature  TEXT NOT NULL,        -- Ed25519(sk_sender, Hash(M || contexte))
+  signature  TEXT NOT NULL,        -- Ed25519(sk_sender, SHA256("localpki-msg-v1\0" || c_message || nonce || acte_uuid || sent_at || sender_sn))
+                                   -- signe le CHIFFRÉ (pas le clair) — cf. §5.3
+
   seq        BIGINT NOT NULL,      -- Numéro de séquence dans l'acte
   sent_at    BIGINT NOT NULL       -- Unix timestamp
 )
@@ -748,9 +750,9 @@ merkle_log (
   id           BIGINT PRIMARY KEY,
   acte_uuid    TEXT REFERENCES actes(uuid),
   message_id   TEXT REFERENCES messages(id),
-  leaf_hash    TEXT NOT NULL,      -- SHA256(signature || acte_uuid || timestamp || seq)
+  leaf_hash    TEXT NOT NULL,      -- SHA256(0x00 || signature || acte_uuid || logged_at || seq), 0x00 = préfixe feuille RFC 6962
   parent_hash  TEXT,               -- Racine du Merkle log après insertion de cette feuille (hex 32 bytes). NULL si l'append a échoué après l'INSERT (jamais en pratique).
-  en_signature TEXT,               -- Sign(sk_EN, root || timestamp) — mis à jour par lot
+  en_signature TEXT,               -- Sign(sk_EN, "localpki-merkle-v1\0" || root || logged_at) — signé à chaque append (une signature EN par message)
   logged_at    BIGINT NOT NULL     -- Unix timestamp
 )
 

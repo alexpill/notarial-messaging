@@ -73,7 +73,7 @@ impl HsmSimulator {
     }
 
     /// Derives a stable X25519 static secret from K_master.
-    /// Kept separate from K_master so the HSM signing key is domain-separated.
+    /// Kept separate from K_master so the HSM encryption (DH) key is domain-separated.
     fn derive_hsm_x25519_sk(&self) -> Zeroizing<x25519_dalek::StaticSecret> {
         let mut sk_bytes = Zeroizing::new([0u8; 32]);
         Hkdf::<Sha256>::new(None, self.master_key.as_ref())

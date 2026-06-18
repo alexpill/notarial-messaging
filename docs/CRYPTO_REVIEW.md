@@ -350,10 +350,11 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
   x509-cert pour le parsing » — mais la génération utilise le `TbsCertificate` de
   `x509-cert` et **rien n'est jamais parsé** (`tbs_der` figé, vérifié comme octets
   opaques). Les deux moitiés de cette phrase étaient inexactes.
-- **`.unwrap()` en production** à [`crates/server/src/routes.rs:19`](../crates/server/src/routes.rs#L19) (parse de
-  l'origine CORS) — viole la règle [CLAUDE.md](../CLAUDE.md) « no unwrap ». Fail-fast au boot donc
-  peu d'enjeu, mais c'est le seul vrai unwrap de production (les `.expect()` HKDF
-  sont réellement infaillibles).
+- **✅ RÉSOLU (2026-06-18) — `.unwrap()` sur l'origine CORS** : `routes.rs` utilise
+  désormais `unwrap_or_else` avec fallback statique (l'origine est de toute façon
+  validée au boot dans `AppConfig::from_env`). Il ne reste **aucun** `.unwrap()` en
+  production ; les seuls `.expect()` restants sont les invariants HKDF (sortie 32 o,
+  réellement infaillibles, documentés).
 - **Pas de dédup de message / unicité de nonce** — un expéditeur peut re-POST son
   propre `{c_message, nonce, signature, timestamp}` identique dans la fenêtre de
   300s et obtenir un second `seq`/leaf. Signature valide → le log montre le « même »
@@ -447,7 +448,7 @@ contenu non vérifié comme du texte normal sape l'UX de non-répudiation.
   token via query string.
 - **AAD AES-GCM** lie le chiffré à `(acte_uuid, ts, sn)` — empêche le rejeu
   cross-acte.
-- **Re-vérification `pk` côté auth** (`crates/server/src/routes/authentication.rs:56`) :
+- **Re-vérification `pk` côté auth** (`crates/server/src/routes/authentication.rs:97`) :
   défense en profondeur contre le swap de clé post-enrollment.
 - **Domain separation HKDF** : `"notariat-msg-v1"`, `"send"`, `"notariat-ecies-v1"`,
   `"notariat-hsm-x25519-v1"`, `"localpki-enrollment-v1"` — toutes distinctes et

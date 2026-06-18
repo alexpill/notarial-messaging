@@ -26,7 +26,7 @@ pub struct SendMessageRequest {
     pub c_message: String,
     /// 96-bit AES-GCM nonce. base64url.
     pub nonce: String,
-    /// Ed25519(sk_sender, SHA256(c_message || nonce || acte_uuid || timestamp || SN)). base64url.
+    /// Ed25519(sk_sender, SHA256("localpki-msg-v1\0" || c_message || nonce || acte_uuid || timestamp || SN)). base64url.
     /// Verified server-side against pk_sender before insert.
     pub signature: String,
     pub timestamp: i64,
@@ -190,7 +190,7 @@ pub async fn send_message(
             })?;
             // Sign tag || root || logged_at (le) so the EN signature binds both
             // the tree state and the moment it was attested. Matches
-            // ARCHITECTURE.md §6.1 (signed_root = Sign(sk_EN, root || timestamp || "log-v1")).
+            // ARCHITECTURE.md §6.1 (signed_root = Sign(sk_EN, "localpki-merkle-v1\0" || root || logged_at)).
             let en_sig = en_sk.sign(&signed_root_payload(&root, now));
 
             // sent_at stores the client-supplied timestamp so decryption AAD is
