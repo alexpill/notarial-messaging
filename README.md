@@ -5,9 +5,11 @@ paradigme **LocalPKI** (Dumas, Lafourcade, Melemedjian, Orfila, Thoniel, 2019).
 
 Réalisé dans le cadre du sujet **S001 — Astéroïde 2026**.
 
-> **Processus de travail** — Les choix de conception, l'analyse des protocoles
-> existants, l'utilisation de l'IA et la méthode d'implémentation sont détaillés
-> dans [`docs/METHODOLOGIE.md`](docs/METHODOLOGIE.md).
+> **Par où commencer** — pour la démarche, les choix de conception et le
+> raisonnement (lecture courte), voir **[`docs/METHODOLOGIE.md`](docs/METHODOLOGIE.md)**.
+> Pour une visite illustrée de l'interface, **[`docs/DEMO.md`](docs/DEMO.md)**. Pour
+> la profondeur technique, **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** est un
+> document de référence à parcourir par section (table des matières en tête).
 
 ---
 
@@ -58,11 +60,11 @@ notarial-messaging/
 
 Pour la structure du code, voir l'arborescence des crates ci-dessus et les `lib.rs` de chaque crate.
 
-**Documentation :**
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — protocoles LocalPKI, hiérarchie de clés, choix cryptographiques et limites assumées.
-- [`docs/CRYPTO_REVIEW.md`](docs/CRYPTO_REVIEW.md) — revue de sécurité (findings, conformité, plan d'action).
-- [`docs/DEMO.md`](docs/DEMO.md) — tutoriel pas-à-pas illustré (enrôlement → messagerie → Merkle).
-- [`docs/METHODOLOGIE.md`](docs/METHODOLOGIE.md) — démarche, choix de conception et usage de l'IA.
+**Documentation (ordre de lecture suggéré) :**
+- [`docs/METHODOLOGIE.md`](docs/METHODOLOGIE.md) — à lire en premier : démarche, choix de conception, raisonnement et usage de l'IA (document court).
+- [`docs/DEMO.md`](docs/DEMO.md) — visite illustrée pas-à-pas (enrôlement → messagerie → Merkle).
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — document de référence : protocoles LocalPKI, hiérarchie de clés, choix cryptographiques et limites assumées (dense, navigable par section).
+- [`docs/CRYPTO_REVIEW.md`](docs/CRYPTO_REVIEW.md) — auto-audit de sécurité (findings, conformité, résolution).
 
 ---
 

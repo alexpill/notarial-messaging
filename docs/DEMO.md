@@ -7,14 +7,15 @@ chiffrés scellés par un journal Merkle.
 
 > Pour lancer le serveur et le frontend, voir le **[README](../README.md)**
 > (« Démarrage rapide »). Une fois le frontend ouvert sur `http://localhost:5173`,
-> tout part de la page d'accueil.
+> tout commence à la page d'accueil.
 
-### Astuce : une identité par onglet
+### Conseil : une identité par onglet
 
 Les clés vivent en `sessionStorage`, qui est **propre à chaque onglet**. Pour
-jouer plusieurs personnes (notaire, Alice, Bob…), ouvre simplement
+incarner plusieurs personnes (notaire, Alice, Bob…), il suffit d'ouvrir
 **un onglet par identité** — elles n'interfèrent pas. Le bouton **« Se
-déconnecter »** abandonne l'identité de l'onglet courant pour repartir de zéro.
+déconnecter »** abandonne l'identité de l'onglet courant et permet de repartir
+de zéro.
 
 ---
 
@@ -29,7 +30,7 @@ simplifications du PoC.
 
 ## 1. Enrôler un notaire
 
-Carte **« Je suis notaire »** → saisis un nom. Un champ **« Jeton d'enrôlement
+Carte **« Je suis notaire »** → saisissez un nom. Un champ **« Jeton d'enrôlement
 notaire »** est **prérempli en dev** (encart « PoC — jeton de démo ») : c'est
 l'autorité de l'EN qui désigne ses notaires. → **« Entrer comme notaire »**.
 
@@ -42,13 +43,13 @@ token. La clé privée ne transite jamais : seul le jeton est envoyé.
 
 <img src="images/02b-notaire-crypto-steps.png" alt="Étapes crypto de l'enrôlement" width="500" />
 
-Tu arrives ensuite dans l'espace notaire (vide au départ) :
+Vous arrivez ensuite dans l'espace notaire (vide au départ) :
 
 <img src="images/03-notaire-dashboard.png" alt="Espace notaire" width="500" />
 
-De retour sur l'accueil (logo / lien « Accueil »), ton identité est désormais
-**connectée** : la page affiche ton nom, ton **SN** (cliquable pour le copier),
-ton rôle `Notaire`, et donne accès à **« Mes actes »** comme à
+De retour sur l'accueil (logo / lien « Accueil »), votre identité est désormais
+**connectée** : la page affiche votre nom, votre **SN** (cliquable pour le copier),
+votre rôle `Notaire`, et donne accès à **« Mes actes »** comme à
 **« Enrôler un client »** — c'est de là que part le flux d'endossement (§4).
 
 <img src="images/03b-notaire-accueil-connecte.png" alt="Accueil notaire connecté" width="500" />
@@ -57,12 +58,12 @@ ton rôle `Notaire`, et donne accès à **« Mes actes »** comme à
 
 ## 2. Enrôler un client (auto-signé — mode démo)
 
-Dans **un nouvel onglet**, carte **« Je suis client »**. Le switch
-**« PoC : auto-enrôlement »** est **activé** par défaut → saisis un nom →
+Dans **un nouvel onglet**, carte **« Je suis client »**. L'option
+**« PoC : auto-enrôlement »** est **activée** par défaut → saisissez un nom →
 **« Entrer comme client »**.
 
 Le client est inscrit immédiatement (mêmes étapes crypto que le notaire). Sa
-fiche affiche son **SN** (cliquable pour le copier) — garde-le, il servira à
+fiche affiche son **SN** (cliquable pour le copier) — conservez-le, il servira à
 l'ajouter à un acte.
 
 <img src="images/04-client-auto-connecte.png" alt="Client auto-enrôlé" width="500" />
@@ -71,7 +72,7 @@ l'ajouter à un acte.
 
 ## 3. Créer un acte
 
-Côté **notaire** → **« Nouvel acte »** → saisis un titre, colle le **SN du
+Côté **notaire** → **« Nouvel acte »** → saisissez un titre, collez le **SN du
 client** dans **« Ajouter une partie (SN hex) »** puis **« Ajouter »** (le
 notaire est ajouté automatiquement) :
 
@@ -89,17 +90,17 @@ serveur et ouvre directement la messagerie chiffrée du dossier :
 C'est le flux conforme à LocalPKI : le client génère son certificat, le notaire
 l'endosse en tant que LRA.
 
-**a.** Dans un nouvel onglet, carte **« Je suis client »**, **désactive** le
-switch → le bouton devient **« Générer mon certificat »** :
+**a.** Dans un nouvel onglet, carte **« Je suis client »**, **désactivez**
+l'option → le bouton devient **« Générer mon certificat »** :
 
-<img src="images/07-client-switch-off.png" alt="Switch désactivé" width="500" />
+<img src="images/07-client-switch-off.png" alt="Option désactivée" width="500" />
 
 **b.** Le certificat est généré localement (pas encore enregistré). Le client le
 **télécharge** (ou le copie) et le transmet à son notaire :
 
 <img src="images/08-client-attente-endossement.png" alt="En attente d'endossement" width="500" />
 
-**c.** Côté **notaire** → accueil connecté → **« Enrôler un client »** → colle le
+**c.** Côté **notaire** → accueil connecté → **« Enrôler un client »** → collez le
 certificat reçu. L'aperçu confirme le sujet et le SN avant validation (le notaire
 est censé vérifier l'identité physique **en personne** à cette étape) :
 
@@ -119,8 +120,8 @@ clé (signature d'un challenge) et obtient sa session :
 
 ## 5. Ajouter une partie à un acte (avec historique)
 
-Côté **notaire**, dans l'acte → **« + Partie »** → colle le SN du client →
-**coche « Accès à l'historique des messages »** → **« Ajouter »**.
+Côté **notaire**, dans l'acte → **« + Partie »** → collez le SN du client →
+**cochez « Accès à l'historique des messages »** → **« Ajouter »**.
 
 <img src="images/12-ajout-participant-historique.png" alt="Ajout de partie avec historique" width="700" />
 
@@ -130,7 +131,7 @@ La partie pourra lire l'historique complet du dossier.
 
 ## 6. Ajouter une partie à un acte **sans** historique
 
-Même panneau, mais **laisse « Accès à l'historique » décoché** :
+Même panneau, mais **laissez « Accès à l'historique » décoché** :
 
 <img src="images/13-ajout-participant-sans-historique.png" alt="Ajout de partie sans historique" width="700" />
 
@@ -163,45 +164,44 @@ conversation :
 
 ---
 
-## Bon à savoir (limites assumées du PoC)
+## À noter (limites assumées du PoC)
 
 - **Modèle de confiance EN → notaire → client** : le rôle `notaire` s'obtient en
   présentant le **jeton d'enrôlement** (l'EN désigne ses notaires) — un client ne
-  peut **jamais** se déclarer notaire. Le self-enrôlement client (switch activé)
-  reste un raccourci démo (rôle `client`) ; le flux endossé (switch désactivé +
+  peut **jamais** se déclarer notaire. Le self-enrôlement client (option activée)
+  reste un raccourci démo (rôle `client`) ; le flux endossé (option désactivée +
   « Enrôler un client ») est le parcours de confiance. Côté serveur, seul un
   `role=notaire` peut endosser un client ou créer un acte. Détails dans
   [`ARCHITECTURE.md` §10.1](ARCHITECTURE.md#101-limites-assumées-choix-délibérés).
 - **Identité non persistante** : fermer l'onglet efface l'identité (clés en
   `sessionStorage`). Il n'y a pas de « se reconnecter plus tard comme Alice » —
-  garde l'onglet ouvert le temps de la démo.
-- **Une identité par onglet** : utilise des onglets séparés pour jouer plusieurs
-  personnes en parallèle.
+  conservez l'onglet ouvert le temps de la démonstration.
+- **Une identité par onglet** : utilisez des onglets séparés pour incarner
+  plusieurs personnes en parallèle.
 
 Toutes les limites sont documentées et justifiées dans [`ARCHITECTURE.md` §10](ARCHITECTURE.md#10-limites-assumées-et-perspectives) et
 [`CRYPTO_REVIEW.md`](CRYPTO_REVIEW.md).
 
 ---
 
-## Idées de scénarios pour aller plus loin
+## Scénarios complémentaires
 
 Quelques parcours additionnels qui mettent en valeur des propriétés du système,
-si tu veux étoffer une démo live :
+pour étoffer une démonstration en direct :
 
-- **Détection d'une forgerie** : modifie à la main un `c_message` ou une
-  `signature` en base (ou via un appel `POST` falsifié) et montre que le serveur
+- **Détection d'une forgerie** : modifiez à la main un `c_message` ou une
+  `signature` en base (ou via un appel `POST` falsifié) et constatez que le serveur
   **rejette** le message — la signature porte sur le ciphertext, donc une
   altération est détectée sans déchiffrement.
-- **Non-répudiation** : exhibe qu'un message signé par Alice ne peut pas être
+- **Non-répudiation** : montrez qu'un message signé par Alice ne peut pas être
   désavoué — sa `pk` est publique dans le registre LocalPKI, la vérification est
-  reproductible par n'importe qui.
-- **Cloisonnement « sans historique »** : ajoute Bob sans historique **après**
-  quelques messages, et montre côté Bob qu'il ne voit que les messages
+  reproductible par tout tiers.
+- **Cloisonnement « sans historique »** : ajoutez Bob sans historique **après**
+  quelques messages, et constatez côté Bob qu'il ne voit que les messages
   postérieurs à son ajout.
-- **Preuve d'inclusion Merkle** : après plusieurs messages, prends la racine
-  signée par l'EN et vérifie qu'un message donné est bien scellé dedans
+- **Preuve d'inclusion Merkle** : après plusieurs messages, prenez la racine
+  signée par l'EN et vérifiez qu'un message donné y est bien scellé
   (cohérent avec la commande `merkle inspect` du `demo-cli`).
-- **Parcours 100 % CLI en parallèle** : lance
+- **Parcours 100 % CLI en parallèle** : lancez
   `cargo run -p demo-cli -- scenario` pour rejouer enrollment → acte → messages →
   Merkle en ligne de commande, en miroir du parcours web.
-</content>
