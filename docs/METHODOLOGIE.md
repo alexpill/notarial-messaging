@@ -6,7 +6,7 @@ Ce document a pour but de détailler comment j'ai travaillé sur ce test techniq
 
 L'IA ayant été autorisée, je me suis permis d'utiliser principalement deux outils d'IA : _NotebookLM_ (Google) pour la recherche de documentation, de sources et pour l'interrogation de ces sources et _Claude_ (Anthropic) avec notamment son outil _Claude Code_ pour la génération de code et la rédaction de documents.
 
-À ce titre, ce document est le seul entièrement rédigé à la main, les autres documents ayant été produits à des degrés divers avec l'aide de l'IA.
+Ce document n'a, quant à lui, pas été rédigé avec l'aide de l'IA.
 
 ## Choix du sujet
 
@@ -26,9 +26,9 @@ En parallèle j'ai échangé avec _Claude_ sur les différentes solutions que je
 
 ### Analyse des protocoles existants
 
-Mon idée initiale était de m'appuyer sur le protocole Signal, reconnu pour son élégance et sa robustesse et qui, dans le cas d'une messagerie sécurisée, me semblait le plus adapté. Il s'est vite avéré qu'appliqué au notariat, ce protocole n'était pas le plus adapté. En effet, le protocole Signal offre notamment une forme de deniability, un moyen de nier qu'on a envoyé un message, alors que dans le cas du notariat il est important d'avoir de la non-répudiation et donc une impossibilité de nier le fait qu'un message a été envoyé. De plus le multi-device est contraignant dans le protocole Signal, bien que le sujet du multi-device n'ait pas été abordé dans la réalisation du test. Un autre souci du protocole Signal est que le serveur est complètement aveugle au niveau des messages qui transitent, ce qui est certes un avantage dans le cas d'une messagerie sécurisée mais peut devenir une contrainte pour un agent de l'état qui est censé pouvoir apporter la preuve de l'échange, aussi bien pour les différentes parties qu'en cas de litige.
+Mon idée initiale était de m'appuyer sur le protocole Signal, reconnu pour son élégance et sa robustesse et qui, dans le cas d'une messagerie sécurisée, me semblait le plus approprié. Il s'est vite avéré qu'appliqué au notariat, ce protocole n'était pas le plus adapté. En effet, le protocole Signal offre notamment une forme de deniability, un moyen de nier qu'on a envoyé un message, alors que dans le cas du notariat il est important d'avoir de la non-répudiation et donc une impossibilité de nier le fait qu'un message a été envoyé. De plus le multi-device est contraignant dans le protocole Signal, bien que le sujet du multi-device n'ait pas été abordé dans la réalisation du test. Un autre souci du protocole Signal est que le serveur est complètement aveugle au niveau des messages qui transitent, ce qui est certes un avantage dans le cas d'une messagerie sécurisée mais peut devenir une contrainte pour un agent de l'état qui est censé pouvoir apporter la preuve de l'échange, aussi bien pour les différentes parties qu'en cas de litige.
 
-Un autre protocole serait le protocole MLS (RFC 9420) mais tout comme le protocole Signal, il impose le forward secrecy qui est certes un très bon niveau de sécurité mais qui, à mon sens, n'est pas compatible avec un notaire qui doit pouvoir accéder aux messages dans certains cas spécifiques et ainsi peu compatible avec le besoin d'archivage long du notariat. Même raisonnement pour le post-compromise security et l'effacement irréversible des clés qui empêche l'archivage légal. De plus, si l'on souhaite ajouter une nouvelle partie à la conversation on ne pourra pas lui permettre de déchiffrer les messages précédents. Une solution à ce problème serait de renvoyer les messages depuis un autre participant mais cela implique qu'il faut gérer le fait que la personne est bien connectée, de quelle manière, est-ce que cette personne a aussi tous les messages etc.
+Une solution serait d'utiliser le protocole MLS (RFC 9420). Cependant, et comme le protocole Signal, il met en œuvre le _forward secrecy_ qui est, certes, un très bon niveau de sécurité mais qui, à mon sens, n'est pas compatible avec le notariat pour lequel l'archivage des documents doit se faire sur le long terme. Il en va de même pour la _post-compromise security_ et l'effacement irréversible des clés qui empêche une fois de plus l'archivage légal. Enfin, si l'on souhaite ajouter une nouvelle partie à la conversation on ne pourra pas lui permettre de déchiffrer les messages précédents. Une éventuelle solution serait de récupérer l'ensemble des messages depuis l'appareil d'un des autres participants mais cette solution implique de considérer des contraintes comme l'état de connexion de ce participant, le fait qu'il ait également l'entièreté des messages etc.
 
 Ces contraintes m'ont conduit à concevoir une approche sur mesure, décrite dans la section suivante.
 
@@ -58,15 +58,15 @@ J'ai suivi la stack technique que nous avions évoquée lors de notre entretien 
 
 ## Concernant la méthode d'implémentation
 
-La première étape a été de définir un squelette de projet, afin d'avoir une bonne base de travail et une vision claire de ce qu'il fallait réaliser.
+La première étape a été de définir l'architecture des fichiers du projet, un squelette pour les différents modules et de chercher les différentes dépendances à utiliser, afin d'avoir une bonne base de travail et une vision claire de ce qu'il fallait réaliser.
 
 J'ai ensuite implémenté la bibliothèque `localpki-core` en utilisant l'IA comme conseiller et tuteur, notamment pour m'approprier les différentes crates de cryptographie et monter en compétence dans le domaine. Cela sous-entend des prompts comme _"Ne me donne pas directement les réponses"_, _"Comment je pourrais améliorer mon code pour être plus rust-idiomatic"_, _"Explique moi les grands concepts et à la demande donne moi des indices pour avancer"_.
 
 Pour la partie `server` j'ai supervisé finement l'IA, en étant assez directif et en spécifiant précisément ce que je voulais à chaque étape.
 
-Pour la partie `demo-cli`, j'ai fourni un cadrage général et laissé l'IA produire le code, que j'ai ensuite vérifié.
+Pour la partie `demo-cli`, j'ai fourni un cadrage général, sous la forme de contraintes, d'exemples et de résultats attendus, et accompagné l'IA dans la production du code. Une fois l'étape de l'implémentation terminée, j'ai pris le temps d'itérer pour atteindre une solution qui me satisfaisait.
 
-Pour le frontend, j'ai laissé l'IA travailler de façon plus autonome, n'ayant pas d'expérience préalable avec SvelteKit et considérant que ce n'était pas forcément le point attendu pour ce test technique. J'ai néanmoins relu en détail toute la partie cryptographique et les échanges avec le serveur.
+Pour le frontend, j'ai laissé l'IA travailler de façon plus autonome, n'ayant pas d'expérience préalable avec `SvelteKit` et considérant que ce n'était pas forcément la partie la plus attendue pour ce test technique. J'ai néanmoins relu en détail toute la partie cryptographique et les échanges avec le serveur.
 
 Une fois l'implémentation terminée, j'ai testé l'ensemble des fonctionnalités et ajouté des tests unitaires en spécifiant les cas à couvrir et en relisant le code produit par l'IA.
 
@@ -78,7 +78,7 @@ En bonus, j'ai demandé à l'IA de générer le document [`DEMO.md`](DEMO.md) de
 
 Le résultat couvre les fonctionnalités attendues mais comporte des limites et quelques déviations par rapport au papier.
 
-La première déviation concerne le stockage côté EN. Dans le papier il est indiqué qu'on ne stocke que le Serial Number (SN) et la Signature ID (SI) mais par souci de simplicité j'ai choisi d'y ajouter notamment la clé publique du participant pour faciliter la vérification des signatures de messages. De plus, notre serveur joue à la fois le rôle de notaire électronique (_Electronic Notary_ ou _EN_) et de serveur d'autorité d'enregistrement local (_Local Registration Authority_ ou _LRA_) ce qui est un choix discutable mais que je pense cohérent dans la mesure où le sujet principal est la messagerie et non pas la communication inter-acteurs. Cette simplification n'est que sur la partie communication dans le sens où les différentes fonctions sont bien présentes dans le code mais nous faisons abstraction du déploiement sur plusieurs machines.
+La première déviation concerne le stockage côté EN. Dans le papier il est indiqué qu'on ne stocke que le Serial Number (SN) et la Signature ID (SI) mais par souci de simplicité j'ai choisi d'y ajouter notamment la clé publique du participant pour faciliter la vérification des signatures de messages. De plus, notre serveur joue à la fois le rôle de notaire électronique (_Electronic Notary_ ou _EN_) et de serveur d'autorité d'enregistrement local (_Local Registration Authority_ ou _LRA_) ce qui est un choix discutable mais que je pense cohérent dans la mesure où le sujet principal est la messagerie et non pas la communication inter-acteurs. Cette simplification n'est que sur la partie communication dans le sens où les différentes fonctions sont bien présentes dans le code mais l'on fait abstraction du déploiement sur plusieurs machines.
 
 Concernant la vérification des identités, c'est `localpki-core` donc le serveur qui effectue la vérification LocalPKI. Normalement dans le papier c'est Alice qui vérifie l'identité de Bob et vice versa mais dans le contexte de messagerie le serveur doit aussi vérifier l'identité car il est partie prenante dans la communication et il ne peut pas faire confiance à Alice pour vérifier Bob. Il est aussi bon de noter que cette vérification n'est faite qu'à la connexion et que donc si un participant est révoqué en cours de session, il n'est pas immédiatement déconnecté.
 
