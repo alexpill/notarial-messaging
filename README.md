@@ -234,8 +234,8 @@ serveur ne reçoit que des données chiffrées et des signatures.
    Bob déchiffre avec K_acte → vérifie la signature d'Alice
 
 5. Vérification d'intégrité
-   Quiconque peut vérifier qu'un message existait à l'instant T via le log Merkle
-   signé par l'EN — sans en lire le contenu
+   Le journal Merkle est append-only et sa racine est signée par l'EN — toute
+   altération de l'historique est détectable, sans en lire le contenu
 ```
 
 ---

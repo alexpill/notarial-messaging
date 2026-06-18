@@ -198,9 +198,11 @@ pour étoffer une démonstration en direct :
 - **Cloisonnement « sans historique »** : ajoutez Bob sans historique **après**
   quelques messages, et constatez côté Bob qu'il ne voit que les messages
   postérieurs à son ajout.
-- **Preuve d'inclusion Merkle** : après plusieurs messages, prenez la racine
-  signée par l'EN et vérifiez qu'un message donné y est bien scellé
-  (cohérent avec la commande `merkle inspect` du `demo-cli`).
+- **Racine signée du journal** : après plusieurs messages, affichez la racine
+  Merkle signée par l'EN (panneau « Merkle » du web ou `merkle inspect` du
+  `demo-cli`) ; toute altération d'un message ferait diverger la racine. La
+  *preuve d'inclusion* par message est codée et testée dans la lib (`merkle.rs`),
+  mais non exposée par une route dans ce PoC (cf. [`ARCHITECTURE.md` §6](ARCHITECTURE.md#6-couche-dintégrité--transparency-log)).
 - **Parcours 100 % CLI en parallèle** : lancez
   `cargo run -p demo-cli -- scenario` pour rejouer enrollment → acte → messages →
   Merkle en ligne de commande, en miroir du parcours web.

@@ -422,14 +422,16 @@ La racine de l'arbre `root_n` est signée **à chaque append** par l'EN, avec un
 ```
 signed_root = Sign(sk_EN, "localpki-merkle-v1\0" || root_n || timestamp_le)
 ```
-où `timestamp` est l'horloge serveur au moment de l'append (`logged_at`), exposée par `GET /actes/:id/merkle` pour permettre la vérification externe.
+où `timestamp` est l'horloge serveur au moment de l'append (`logged_at`). `GET /actes/:id/merkle` renvoie la racine courante, la signature de l'EN et cet horodatage.
 
 ### 6.2 Propriétés garanties
 
-- **Existence** : prouver qu'un message existait à un instant donné sans révéler son contenu.
+- **Existence** : un message donné peut être prouvé *scellé* dans le journal par une **preuve d'inclusion** (chemin Merkle) — `proof`/`verify_proof` dans `merkle.rs` (RFC 6962). Voir la note de périmètre ci-dessous pour son exposition.
 - **Ordre** : les messages ont un ordre total non falsifiable (numéro de séquence dans le leaf).
 - **Intégrité** : toute modification d'un message invalide tous les hashes suivants dans la chaîne.
 - **Non-répudiation** : `SIG_i` est inclus dans chaque leaf — la preuve d'authenticité est liée à la preuve d'existence.
+
+> **Périmètre du PoC** : l'API expose la **racine signée** du journal (append-only, horodatée, signée par l'EN), ce qui démontre l'**anti-falsification** et l'**ordre total**. La génération de **preuves d'inclusion par message** est présente et testée dans `merkle.rs`, mais n'est pas branchée sur une route HTTP : son exposition (`GET …/merkle/proof/:seq`) est une étape de production simple, laissée hors périmètre.
 
 ### 6.3 Ce que le log ne garantit pas
 
