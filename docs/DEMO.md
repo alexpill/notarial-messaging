@@ -24,7 +24,7 @@ de zéro.
 Deux portes d'entrée (notaire / client) et un encart qui explique honnêtement les
 simplifications du PoC.
 
-<img src="images/01-accueil.png" alt="Page d'accueil" width="500" />
+<img src="images/01-accueil.png" alt="Page d'accueil" width="700" />
 
 ---
 
@@ -34,25 +34,25 @@ Carte **« Je suis notaire »** → saisissez un nom. Un champ **« Jeton d'enr�
 notaire »** est **prérempli en dev** (encart « PoC — jeton de démo ») : c'est
 l'autorité de l'EN qui désigne ses notaires. → **« Entrer comme notaire »**.
 
-<img src="images/02-notaire-enrole.png" alt="Enrôlement notaire" width="500" />
+<img src="images/02-notaire-enrole.png" alt="Enrôlement notaire" width="700" />
 
 L'application déroule alors, **dans le navigateur**, les étapes
 cryptographiques — génération de la paire Ed25519, construction du TBSCert
 X.509v3, auto-signature `SI`, enrôlement auprès de l'EN, obtention du session
 token. La clé privée ne transite jamais : seul le jeton est envoyé.
 
-<img src="images/02b-notaire-crypto-steps.png" alt="Étapes crypto de l'enrôlement" width="500" />
+<img src="images/02b-notaire-crypto-steps.png" alt="Étapes crypto de l'enrôlement" width="700" />
 
 Vous arrivez ensuite dans l'espace notaire (vide au départ) :
 
-<img src="images/03-notaire-dashboard.png" alt="Espace notaire" width="500" />
+<img src="images/03-notaire-dashboard.png" alt="Espace notaire" width="700" />
 
 De retour sur l'accueil (logo / lien « Accueil »), votre identité est désormais
 **connectée** : la page affiche votre nom, votre **SN** (cliquable pour le copier),
 votre rôle `Notaire`, et donne accès à **« Mes actes »** comme à
 **« Enrôler un client »** — c'est de là que part le flux d'endossement (§4).
 
-<img src="images/03b-notaire-accueil-connecte.png" alt="Accueil notaire connecté" width="500" />
+<img src="images/03b-notaire-accueil-connecte.png" alt="Accueil notaire connecté" width="700" />
 
 ---
 
@@ -66,7 +66,7 @@ Le client est inscrit immédiatement (mêmes étapes crypto que le notaire). Sa
 fiche affiche son **SN** (cliquable pour le copier) — conservez-le, il servira à
 l'ajouter à un acte.
 
-<img src="images/04-client-auto-connecte.png" alt="Client auto-enrôlé" width="500" />
+<img src="images/04-client-auto-connecte.png" alt="Client auto-enrôlé" width="700" />
 
 ---
 
@@ -76,12 +76,12 @@ Côté **notaire** → **« Nouvel acte »** → saisissez un titre, collez le *
 client** dans **« Ajouter une partie (SN hex) »** puis **« Ajouter »** (le
 notaire est ajouté automatiquement) :
 
-<img src="images/05-acte-creation.png" alt="Création d'acte" width="500" />
+<img src="images/05-acte-creation.png" alt="Création d'acte" width="700" />
 
 **« Créer l'acte »** déclenche l'opération HSM (dérivation de `K_acte`) côté
 serveur et ouvre directement la messagerie chiffrée du dossier :
 
-<img src="images/06-acte-cree.png" alt="Acte créé" width="500" />
+<img src="images/06-acte-cree.png" alt="Acte créé" width="700" />
 
 ---
 
@@ -93,28 +93,28 @@ l'endosse en tant que LRA.
 **a.** Dans un nouvel onglet, carte **« Je suis client »**, **désactivez**
 l'option → le bouton devient **« Générer mon certificat »** :
 
-<img src="images/07-client-switch-off.png" alt="Option désactivée" width="500" />
+<img src="images/07-client-switch-off.png" alt="Option désactivée" width="700" />
 
 **b.** Le certificat est généré localement (pas encore enregistré). Le client le
 **télécharge** (ou le copie) et le transmet à son notaire :
 
-<img src="images/08-client-attente-endossement.png" alt="En attente d'endossement" width="500" />
+<img src="images/08-client-attente-endossement.png" alt="En attente d'endossement" width="700" />
 
 **c.** Côté **notaire** → accueil connecté → **« Enrôler un client »** → collez le
 certificat reçu. L'aperçu confirme le sujet et le SN avant validation (le notaire
 est censé vérifier l'identité physique **en personne** à cette étape) :
 
-<img src="images/09-notaire-endosse.png" alt="Endossement notaire" width="500" />
+<img src="images/09-notaire-endosse.png" alt="Endossement notaire" width="700" />
 
 Après **« Vérifié — approuver »**, le notaire signe l'endossement avec sa clé
 privée et l'identité est enregistrée auprès de l'EN (qui ne conserve que l'enregistrement (SN, SI) + la clé publique, jamais le contenu des échanges) :
 
-<img src="images/10-endossement-succes.png" alt="Endossement réussi" width="500" />
+<img src="images/10-endossement-succes.png" alt="Endossement réussi" width="700" />
 
 **d.** Le client revient sur **« Se connecter »** : il prouve la possession de sa
 clé (signature d'un challenge) et obtient sa session :
 
-<img src="images/11-bob-connecte.png" alt="Client connecté" width="500" />
+<img src="images/11-bob-connecte.png" alt="Client connecté" width="700" />
 
 ---
 
@@ -147,7 +147,7 @@ La partie ne verra que les messages **postérieurs** à son ajout.
 
 Côté client, le dossier apparaît dans **« Mes actes »** :
 
-<img src="images/11b-client-liste-actes.png" alt="Liste des actes côté client" width="500" />
+<img src="images/11b-client-liste-actes.png" alt="Liste des actes côté client" width="700" />
 
 Les parties échangent ensuite des messages **chiffrés de bout en bout**. Chaque
 message porte le nom de son expéditeur et un indicateur de **signature vérifiée**
