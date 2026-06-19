@@ -22,7 +22,7 @@
 
 	async function tryAuth() {
 		if (!identity) {
-			error = "Aucune identité locale — utilise « S'enroller » d'abord.";
+			error = "Aucune identité locale — utilisez « S'enrôler » d'abord.";
 			return;
 		}
 		error = '';
@@ -36,7 +36,7 @@
 			const resp = await authVerify(certJson, chal.challenge, popSig);
 			if (!resp.authenticated || !resp.session_token) {
 				error =
-					"Tu n'es pas encore enregistré côté EN. Attends qu'un notaire ait approuvé ta demande.";
+					"Vous n'êtes pas encore enregistré côté EN. Attendez qu'un notaire ait approuvé votre demande.";
 				return;
 			}
 			tokenStore.save(resp.session_token);
@@ -45,7 +45,7 @@
 		} catch (e) {
 			if (e instanceof ApiError && e.status === 401) {
 				error =
-					"Identité non reconnue par l'EN. Un notaire doit d'abord valider ton enrôlement.";
+					"Identité non reconnue par l'EN. Un notaire doit d'abord valider votre enrôlement.";
 			} else {
 				error = e instanceof Error ? e.message : String(e);
 			}
@@ -60,8 +60,8 @@
 		<Card.Header>
 			<Card.Title>Se connecter</Card.Title>
 			<Card.Description>
-				Vérifie ton certificat local auprès de l'EN. Si un notaire t'a déjà
-				enregistré, tu obtiens un session token.
+				Vérifiez votre certificat local auprès de l'EN. Si un notaire vous a déjà
+				enregistré, vous obtenez un session token.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-3">
@@ -72,7 +72,7 @@
 				</div>
 			{:else}
 				<p class="text-sm text-muted-foreground">
-					Aucune identité locale détectée. Commence par « S'enroller ».
+					Aucune identité locale détectée. Commencez par « S'enrôler ».
 				</p>
 			{/if}
 			{#if error}
@@ -88,7 +88,7 @@
 					{loading ? 'Vérification…' : 'Se connecter'}
 				</Button>
 			{:else}
-				<Button href="/enroll" class="flex-1">S'enroller</Button>
+				<Button href="/enroll" class="flex-1">S'enrôler</Button>
 			{/if}
 			<Button href="/" variant="outline" disabled={loading}>Retour</Button>
 		</Card.Footer>

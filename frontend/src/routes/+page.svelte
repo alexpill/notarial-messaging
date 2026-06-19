@@ -311,7 +311,7 @@
 			<Card.Header>
 				<Card.Title>Certificat généré — en attente d'endossement</Card.Title>
 				<Card.Description>
-					Ton identité est créée localement mais pas encore enregistrée par l'EN.
+					Votre identité est créée localement mais pas encore enregistrée par l'EN.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-3 text-sm">
@@ -320,13 +320,13 @@
 					<p class="font-mono text-xs text-muted-foreground break-all">SN : {identity.sn_hex}</p>
 				</div>
 				<ol class="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
-					<li>Télécharge ton certificat (ou copie-le).</li>
-					<li>Transmets-le à ton notaire → « Enrôler un client ».</li>
-					<li>Une fois endossé, reviens te connecter.</li>
+					<li>Téléchargez votre certificat (ou copiez-le).</li>
+					<li>Transmettez-le à votre notaire → « Enrôler un client ».</li>
+					<li>Une fois endossé, reconnectez-vous.</li>
 				</ol>
 				<div class="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-					Garde cet onglet ouvert : la clé privée vit en mémoire de session. La fermer
-					avant de te connecter perdrait l'identité.
+					Gardez cet onglet ouvert : la clé privée vit en mémoire de session. La fermer
+					avant de vous connecter perdrait l'identité.
 				</div>
 				{#if enrollError}
 					<p class="text-xs text-destructive">{enrollError}</p>
@@ -377,7 +377,7 @@
 							<p>
 								Prérempli en développement. En production, l'EN génère ce jeton et le
 								remet à l'office comme <strong>secret opérateur</strong> (imprimé dans les
-								logs du serveur) — il n'est jamais envoyé au navigateur. Ta clé privée,
+								logs du serveur) — il n'est jamais envoyé au navigateur. Votre clé privée,
 								elle, ne quitte jamais cet onglet.
 							</p>
 							<p class="font-mono break-all">{devNotaireToken}</p>
@@ -420,7 +420,7 @@
 							{#if autoEnroll}
 								— inscription immédiate, sans notaire (démo).
 							{:else}
-								— désactivé : génère ton certificat, un notaire devra l'endosser.
+								— désactivé : génère votre certificat, un notaire devra l'endosser.
 							{/if}
 						</span>
 					</label>

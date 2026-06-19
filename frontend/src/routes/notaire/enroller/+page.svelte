@@ -82,8 +82,8 @@
 			<Card.Header>
 				<Card.Title>Enrôler un client (rôle LRA)</Card.Title>
 				<Card.Description>
-					Tu agis ici comme LRA pour LocalPKI. Vérifie l'identité physique du client,
-					colle le certificat qu'il t'a transmis, puis approuve. Ta clé privée signe
+					Vous agissez ici comme LRA pour LocalPKI. Vérifiez l'identité physique du client,
+					collez le certificat qu'il vous a transmis, puis approuvez. Votre clé privée signe
 					l'endossement — l'EN ne stocke que le hash.
 				</Card.Description>
 			</Card.Header>
@@ -91,7 +91,7 @@
 			{#if !identity || !token}
 				<Card.Content>
 					<p class="text-sm text-destructive">
-						Tu dois être connecté comme notaire pour utiliser cette page.
+						Vous devez être connecté comme notaire pour utiliser cette page.
 					</p>
 				</Card.Content>
 				<Card.Footer>
@@ -107,7 +107,7 @@
 							SN : <span class="font-mono">{success.sn}</span>
 						</p>
 						<p class="mt-2 text-xs">
-							Tu peux confirmer au client qu'il peut se connecter avec sa session locale.
+							Vous pouvez confirmer au client qu'il peut se connecter avec sa session locale.
 						</p>
 					</div>
 				</Card.Content>
@@ -131,7 +131,7 @@
 							id="cert"
 							bind:value={certInput}
 							rows="10"
-							placeholder="Colle ici le JSON du certificat envoyé par le client"
+							placeholder="Collez ici le JSON du certificat envoyé par le client"
 							class="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
 							disabled={loading}
 						></textarea>
@@ -156,8 +156,8 @@
 								</span>
 							</p>
 							<p class="pt-1 text-muted-foreground italic">
-								Vérifie en personne que cette identité est bien celle de la personne
-								en face de toi avant d'approuver.
+								Vérifiez en personne que cette identité est bien celle de la personne
+								en face de vous avant d'approuver.
 							</p>
 						</div>
 					{/if}
