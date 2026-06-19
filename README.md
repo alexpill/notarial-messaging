@@ -40,8 +40,8 @@ Ce projet construit un système de messagerie sur cette fondation :
 |---|---|
 | Backend / EN | Rust — Axum 0.7, SQLite (Diesel 2) |
 | Crypto Rust | RustCrypto — ed25519-dalek, x25519-dalek, aes-gcm, hkdf |
-| Frontend | SvelteKit 5 + TypeScript + Tailwind CSS + shadcn-svelte |
-| Crypto JS | @noble — ed25519, hashes, ciphers, curves |
+| Frontend | SvelteKit 2 (Svelte 5) + TypeScript + Tailwind CSS + shadcn-svelte |
+| Crypto JS | @noble — curves (ed25519/x25519), hashes, ciphers |
 | CLI démo | demo-cli (Rust, clap) |
 
 ---
@@ -83,14 +83,14 @@ Pour la structure du code, voir l'arborescence des crates ci-dessus et les `lib.
 cp .env.example .env
 ```
 
-Générer les clés pour `.env` :
+Générer deux clés 256 bits et **remplacer** les placeholders `0000…` des champs
+`HSM_MASTER_KEY_HEX` et `EN_SIGNING_KEY_HEX` dans `.env` — éditer les lignes
+existantes (ne pas les ajouter en double : en cas de clé dupliquée, c'est la
+**première** occurrence qui est retenue, donc le placeholder l'emporterait) :
 
 ```bash
-# Clé maître HSM simulée (256 bits)
-echo "HSM_MASTER_KEY_HEX=$(openssl rand -hex 32)" >> .env
-
-# Clé de signature de l'EN
-echo "EN_SIGNING_KEY_HEX=$(openssl rand -hex 32)" >> .env
+openssl rand -hex 32   # → coller dans HSM_MASTER_KEY_HEX
+openssl rand -hex 32   # → coller dans EN_SIGNING_KEY_HEX
 ```
 
 `.env.example` fixe aussi un `NOTAIRE_ENROLLMENT_TOKEN` de démo (le **jeton

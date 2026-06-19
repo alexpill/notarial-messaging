@@ -24,7 +24,7 @@ pub struct AuthRequest {
 pub struct AuthResponse {
     pub status: AuthStatus,
     pub request_echo: AuthRequest,
-    /// Sign(sk_EN, SHA256(status || SN || SI || nonce))
+    /// Sign(sk_EN, SHA256("localpki-auth-v1\0" || status || SN || SI || nonce))
     pub en_signature: ed25519_dalek::Signature,
 }
 

@@ -721,7 +721,7 @@ actes (
   notaire_sn     TEXT REFERENCES identities(sn),
   created_at     BIGINT NOT NULL,  -- Unix timestamp
   closed_at      BIGINT,           -- NULL si actif
-  c_acte_archive TEXT NOT NULL     -- ECIES(pk_HSM, K_acte) — opaque serveur
+  c_acte_archive TEXT NOT NULL     -- ECIES(pk_HSM, K_acte || acte_uuid) — opaque serveur
 )
 
 -- Participants par acte

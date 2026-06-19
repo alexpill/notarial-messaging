@@ -120,7 +120,7 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
         acte["parties"].as_array().map(|p| p.len()).unwrap_or(0)
     ));
 
-    // ─── Étape 6 : Échange de messages ──────────────────────────────────────
+    // ─── Étape 5 : Échange de messages ──────────────────────────────────────
     step(5, 7, "Échange de messages chiffrés");
 
     // Alice récupère K_acte et envoie le premier message.
@@ -169,7 +169,7 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
         msg_bob["c_message"].as_str().unwrap_or("").len()
     ));
 
-    // ─── Étape 7 : Lecture et déchiffrement ─────────────────────────────────
+    // ─── Étape 6 : Lecture et déchiffrement ─────────────────────────────────
     step(6, 7, "Lecture et déchiffrement des messages");
 
     // Notaire récupère K_acte et lit tous les messages.
@@ -196,15 +196,15 @@ pub async fn run(server: &str) -> anyhow::Result<()> {
         decode_and_print_message(&bob_k_acte, msg)?;
     }
 
-    // ─── Étape 8 : Merkle Log ────────────────────────────────────────────────
+    // ─── Étape 7 : Merkle Log ────────────────────────────────────────────────
     step(7, 7, "Vérification du Merkle Log de transparence");
     let merkle = client.get_merkle(notaire_token, &acte_id).await?;
     let root = merkle["root"].as_str().unwrap_or("(vide)");
     let count = merkle["leaves_count"].as_u64().unwrap_or(0);
     ok(&format!("Racine Merkle  : {}", root.yellow()));
     ok(&format!("Feuilles       : {count} messages indexés"));
-    info("Chaque feuille = SHA256(signature || acte_uuid || timestamp || seq)");
-    info("La racine peut être signée par l'EN pour preuve d'intégrité horodatée");
+    info("Chaque feuille = SHA256(0x00 || signature || acte_uuid || timestamp || seq)");
+    info("La racine est signée par l'EN à chaque ajout — preuve d'intégrité horodatée");
 
     // ─── Résumé ──────────────────────────────────────────────────────────────
     println!("\n{}", "═══════════════════════════════════════════════════════════".bold().yellow());

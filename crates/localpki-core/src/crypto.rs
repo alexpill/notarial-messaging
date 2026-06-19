@@ -1,7 +1,8 @@
-// ED25519/X25519 key pair generation
-// We chose to use the same key pair for both signing and encryption.
-// This is a bad idea in general, but it is fine for our PoC.
-// See ARCHITECTURE.md §8.1 for more details.
+// ED25519/X25519 key pair generation.
+// One key pair serves both signing (Ed25519) and asymmetric encryption (X25519 via
+// conversion). Reusing key material across two primitives is not best practice — their
+// security proofs don't compose — so this is a deliberate PoC simplification, not a
+// recommendation. See ARCHITECTURE.md §8.1 for the rationale and production alternative.
 
 use crate::error::LocalPkiError;
 use ed25519_dalek::{SigningKey, VerifyingKey};

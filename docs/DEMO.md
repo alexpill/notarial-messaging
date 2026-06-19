@@ -199,7 +199,7 @@ pour étoffer une démonstration en direct :
   quelques messages, et constatez côté Bob qu'il ne voit que les messages
   postérieurs à son ajout.
 - **Racine signée du journal** : après plusieurs messages, affichez la racine
-  Merkle signée par l'EN (panneau « Merkle » du web ou `merkle inspect` du
+  Merkle signée par l'EN (panneau « Merkle » du web ou `merkle` du
   `demo-cli`) ; toute altération d'un message ferait diverger la racine. La
   *preuve d'inclusion* par message est codée et testée dans la lib (`merkle.rs`),
   mais non exposée par une route dans ce PoC (cf. [`ARCHITECTURE.md` §6](ARCHITECTURE.md#6-couche-dintégrité--transparency-log)).
