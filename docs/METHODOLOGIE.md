@@ -60,7 +60,7 @@ J'ai suivi la stack technique que nous avions évoquée lors de notre entretien 
 
 La première étape a été de définir l'architecture des fichiers du projet, un squelette pour les différents modules et de chercher les différentes dépendances à utiliser, afin d'avoir une bonne base de travail et une vision claire de ce qu'il fallait réaliser.
 
-J'ai ensuite implémenté la bibliothèque `localpki-core` en utilisant l'IA comme conseiller et tuteur, notamment pour m'approprier les différentes crates de cryptographie et monter en compétence dans le domaine. Cela sous-entend des prompts comme _"Ne me donne pas directement les réponses"_, _"Comment je pourrais améliorer mon code pour être plus rust-idiomatic"_, _"Explique moi les grands concepts et à la demande donne moi des indices pour avancer"_.
+J'ai ensuite implémenté les bibliothèques `localpki-core` et `messaging-crypto` en utilisant l'IA comme conseiller et tuteur, notamment pour m'approprier les différentes crates de cryptographie et monter en compétence dans le domaine. Cela sous-entend des prompts comme _"Ne me donne pas directement les réponses"_, _"Comment je pourrais améliorer mon code pour être plus rust-idiomatic"_, _"Explique moi les grands concepts et à la demande donne moi des indices pour avancer"_, en plus d'une exploration des documentations des différentes crates.
 
 Pour la partie `server` j'ai supervisé finement l'IA, en étant assez directif et en spécifiant précisément ce que je voulais à chaque étape.
 
